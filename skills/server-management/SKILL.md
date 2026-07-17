@@ -196,6 +196,28 @@ Proceed? (yes/no)
 
 ---
 
+## Skills Sync (skillshare)
+
+srv1, mnt1, and sandbox each have `skillshare` installed with `~/.config/skillshare`
+cloned from `git@github.com:rmontan/skills.git` (global mode, `git_root: root`) — this
+is the same repo the Mac's `~/.config/skillshare` syncs from. Skills land symlinked
+into `~/.claude/skills` (and `~/.gemini/skills`, `~/.config/opencode/skills` on sandbox).
+
+**"Sync skills to all servers" / "update skills on srv1/mnt1/sandbox" means:**
+```bash
+ssh srv1 skillshare pull
+ssh mnt1 skillshare pull
+ssh sandbox skillshare pull
+```
+`skillshare pull` does `git pull` + `skillshare sync` in one shot. If a skill was
+edited locally on the Mac first, push it to the repo before pulling on the servers
+(`skillshare push` from the Mac, or plain `git push` from `~/.config/skillshare`).
+
+Don't hand-copy or manually symlink skill directories on any server — everything
+should flow through this repo so all hosts stay in sync from one source.
+
+---
+
 ## Error Handling
 
 - SSH fails: verify alias (`srv1`/`mnt1`/`sandbox`/`nas`), check `ssh-add -l`,
