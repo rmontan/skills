@@ -168,6 +168,38 @@ exceptions — don't mount volumes elsewhere on the filesystem.
 - Before creating a new container, `ls /docker` to check naming collisions and existing conventions.
 - Manage with `docker compose` from inside `/docker/<container-name>/` (`ps`, `logs -f`, `restart`, `down`).
 
+**User/group:** containers run as `1001:110`, not root — set `user: "1001:110"` at
+the service level in every `docker-compose.yml`. All three hosts have a uid-1001
+account (named `docker`) and a gid-110 group backing this (named `docker` on srv1,
+`docker-user` on mnt1/sandbox — the group *name* varies but the GID is always 110).
+`roberto` is a member of that gid-110 group on all three, plus each host's actual
+Docker daemon-socket group, so it can both administer containers (`docker ps`,
+`compose up`, etc.) and own/read/write the `1001:110` bind-mounted data without sudo.
+Before assuming this is set up on a *new* host, verify with `id docker`.
+
+**Bind mounts only:** all persistent data uses bind mounts (`./data/...`) —
+named or anonymous Docker volumes are forbidden. See the Quick Reference below.
+
+```yaml
+services:
+  myapp:
+    user: "1001:110"
+    volumes:
+      - ./data/myapp:/var/lib/myapp   # correct — bind mount
+      - myapp_data:/var/lib/myapp     # forbidden — named volume
+```
+
+New container checklist: create `/docker/<name>/data/<service>` first, write the
+compose file, `sudo chown -R 1001:110 /docker/<name>/data`, then `docker compose up`.
+
+---
+
+## Data Directories (srv1)
+
+Outside of `/docker/`, srv1 also uses:
+- `/data` — application data, databases, archives
+- `/data/archives` — file archives
+
 ---
 
 ## Dangerous Operation Confirmation
