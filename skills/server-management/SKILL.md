@@ -201,7 +201,8 @@ Proceed? (yes/no)
 srv1, mnt1, and sandbox each have `skillshare` installed with `~/.config/skillshare`
 cloned from `git@github.com:rmontan/skills.git` (global mode, `git_root: root`) — this
 is the same repo the Mac's `~/.config/skillshare` syncs from. Skills land symlinked
-into `~/.claude/skills` (and `~/.gemini/skills`, `~/.config/opencode/skills` on sandbox).
+into `~/.claude/skills`, `~/.gemini/skills`, and `~/.config/opencode/skills` on all
+three servers (Claude, agy/antigravity, and opencode are used on all of them).
 
 **"Sync skills to all servers" / "update skills on srv1/mnt1/sandbox" means:**
 ```bash
@@ -215,6 +216,19 @@ edited locally on the Mac first, push it to the repo before pulling on the serve
 
 Don't hand-copy or manually symlink skill directories on any server — everything
 should flow through this repo so all hosts stay in sync from one source.
+
+---
+
+## Credentials
+
+Server/service credentials (mail account, SMTP relay, etc.) live in
+`~/.config/server/credentials.env` on srv1, mnt1, and sandbox — never in this skill,
+never in the skillshare repo, never in chat. That file is host-local, deployed
+out-of-band (not via git/skillshare), and not readable without the right permissions
+(root-owned 600 on srv1; roberto-owned 600 on mnt1/sandbox).
+
+If a task needs a credential from it, read the specific value you need rather than
+dumping the whole file, and don't echo secret values back into chat or logs.
 
 ---
 
