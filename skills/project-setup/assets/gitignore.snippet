@@ -1,0 +1,20 @@
+# --- Claude + opencode multi-agent workflow ---
+# Per-WP worktrees the coordinator creates for parallel agents
+.worktrees/
+
+# --- Environment / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Editor / OS noise ---
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# --- Add stack-specific entries below (pick what applies) ---
+# Node:        node_modules/  dist/  build/  *.tsbuildinfo  coverage/
+# Python:      __pycache__/  *.pyc  .venv/  .pytest_cache/  .mypy_cache/  dist/  *.egg-info/
+# Go:          /bin/  *.test  *.out
+# Rust:        /target/

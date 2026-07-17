@@ -1,275 +1,204 @@
 ---
 name: server-management
 description: |
-  Server management skill for nas (TrueNAS Scale), srv1 (Ubuntu production server), mnt1 (Ubuntu test server).
-  Use when: managing servers, SSH connections, Docker containers, package updates, code deployment, log analysis.
-  Access servers via `ssh nas`, `ssh srv1`, `ssh mnt1`. Remote users have sudo without password.
-  IMPORTANT: nas management is read-only; srv1 and mnt1 allow full management with confirmation.
+  Use when managing srv1 (production), mnt1 (personal server), sandbox (test server),
+  or nas (TrueNAS Scale) — SSH connections, Docker containers, package updates,
+  code deployment, log analysis, or checking service/firewall status on the home lab.
+  Access via `ssh srv1`, `ssh mnt1`, `ssh sandbox`, `ssh nas`. All Linux hosts have a
+  passwordless-sudo `roberto` user; nas is GUI-managed only, no CLI Docker/app changes.
 license: MIT
 metadata:
-  version: "1.5.0"
+  version: "2.0.0"
   category: infrastructure
   servers:
+    srv1:
+      alias: srv1
+      connection: ssh srv1
+      hostname: srv1.stp.vc
+      os: Ubuntu Linux
+      role: Production server (Step company)
+      user: roberto (passwordless sudo)
+      hosting: Hetzner, behind its own firewall
+      management: full, with confirmation for dangerous ops (same rules as mnt1/sandbox)
+    mnt1:
+      alias: mnt1
+      connection: ssh mnt1
+      ip: 10.10.10.231
+      os: Ubuntu Linux
+      role: Personal server
+      user: roberto (passwordless sudo)
+      hosting: VM on nas
+      management: full, with confirmation for dangerous ops
+    sandbox:
+      alias: sandbox
+      connection: ssh sandbox
+      ip: 10.10.10.233
+      os: Ubuntu Linux
+      role: Test server
+      user: roberto (passwordless sudo)
+      hosting: VM on nas
+      management: full, with confirmation for dangerous ops
     nas:
       alias: nas
       connection: ssh nas
       ip: 10.10.10.102
       os: TrueNAS Scale (Debian-based)
-      role: Home NAS + TrueNAS Apps
-      management: read-only only, no CLI Docker management
-    srv1:
-      alias: srv1
-      connection: ssh srv1
-      hostname: srv1.stp.vc
-      os: Ubuntu
-      role: Production server for Step company
-      user: roberto (sudo without password)
-      management: full with confirmation
-    mnt1:
-      alias: mnt1
-      connection: ssh mnt1
-      os: Ubuntu
-      role: Test server
-      user: roberto (sudo without password)
-      management: full with confirmation
+      role: Home NAS, hosts mnt1/sandbox VMs, runs NPM (Nginx Proxy Manager)
+      user: admin (SSH login user — no roberto account on nas)
+      management: read-only via CLI; all app/container/storage changes go through the TrueNAS web UI
 ---
 
-## Server Connection Workflow
+## Overview
 
-When user requests action on a server (nas, srv1, or mnt1):
+Four machines: **srv1** (production), **mnt1** (personal), **sandbox** (test), **nas**
+(TrueNAS, GUI-only). All Linux hosts (srv1/mnt1/sandbox) run Docker under the
+`roberto` user, which has passwordless sudo. SSH between all hosts is
+passwordless.
 
-### Step 1: Parse Target Server
+## Network Topology
+
 ```
-User: "check disk space on nas" → target = nas
-User: "restart the web container on srv1" → target = srv1
-User: "test new config on mnt1" → target = mnt1
+                 Mac (client)
+        ┌───────────┬──────────┬───────────┐
+        │           │          │           │
+        ▼           ▼          ▼           ▼
+      srv1        mnt1      sandbox       nas
+   (Hetzner,     (VM on    (VM on     (TrueNAS,
+    isolated)      nas)       nas)     hosts NPM)
+        ▲           │  ▲       │  ▲
+        │           └──┼───────┘  │
+        └──────────────┘──────────┘
+   mnt1 ↔ sandbox ↔ srv1 (mesh; srv1 accepts inbound only)
 ```
 
-### Step 2: SSH Connection
+- **Mac → all four**: full SSH access, passwordless. This is the starting point for everything.
+- **mnt1 ↔ sandbox**: can SSH to each other.
+- **mnt1 → srv1** and **sandbox → srv1**: can SSH in.
+- **srv1 → anything**: cannot initiate SSH out to mnt1, sandbox, or nas. srv1 is a one-way-in leaf node.
+- **nas, mnt1, sandbox**: sit behind a shared home firewall (10.10.10.0/24).
+- **srv1**: hosted on Hetzner behind its own firewall — allows all traffic from the home network's public IP, and only ports 80/443 from everywhere else.
+- **NPM (Nginx Proxy Manager)** runs on nas and is the single reverse proxy for external access to services on nas, mnt1, and sandbox. Any service on those three that needs external exposure goes through NPM, not a direct port-forward.
+- External access to services on **srv1** goes through its own Hetzner-side setup (ports 80/443 only) — srv1 is not behind NPM since NPM lives on the home network.
+
+## Step 1: Identify the Target Host
+
+Parse the user's request to a single target: `srv1`, `mnt1`, `sandbox`, or `nas`.
+If the task requires hopping between hosts (e.g. deploying from mnt1 to srv1),
+identify every hop up front — remember srv1 cannot initiate outbound hops.
+
+## Step 2: Connect and Confirm Location
+
 ```bash
 ssh <target>
-# Example: ssh nas, ssh srv1, or ssh mnt1
+hostname   # confirm you actually landed where you intended
 ```
 
-### Step 3: Read Server-Specific Skills (Mandatory — Including Plan Mode)
+Do this **once per session**, right after connecting — not before every
+individual command. If you hop between hosts mid-session (e.g. mnt1 → srv1),
+re-run `hostname` after each hop, since it's easy to lose track of which box
+a shell is on.
 
-**IMPORTANT:** This step is NOT optional. Even when operating in plan mode (i.e., before executing any task), you MUST connect to the server and read available skills before formulating any plan that involves srv1, nas, or mnt1.
+## Step 3: Execute the Task
 
-After connecting via SSH, ALWAYS run:
-```bash
-ls -la ~/.config/opencode/skills/ 2>/dev/null
-```
-
-On srv1, `~` resolves to `/home/roberto/.config/opencode` for both the `roberto` user and the `root` user (because `/root/.config/opencode` is a symlink to `/home/roberto/.config/opencode`). This means the same skills are available regardless of which user context you are running in.
-
-If skill files or subdirectories exist at this path, read ALL of them. Their directives take precedence over the general guidelines in this file when they conflict.
-
-**Directive priority:**
-1. Server-specific skill directives (highest priority)
-2. General server rules in this file
-3. Default behavior
-
-### Step 4: Execute Task
-Execute the requested task using the appropriate guardrails for that server.
+Apply the server-specific rules below. For dangerous operations, always use
+the confirmation template regardless of which server (srv1, mnt1, sandbox all
+follow the same rule — production gets no special exemption or extra strictness,
+just the same discipline).
 
 ---
 
 ## Server-Specific Rules
 
-### nas (TrueNAS Scale)
+### nas (TrueNAS Scale) — read-only, GUI-managed
 
-**ALLOWED Operations (Read-Only):**
-- Check pool status: `zpool status`
-- List datasets: `zfs list`
-- Check dataset space: `df -h`
-- View TrueNAS alerts: `midclt call alert.query`
-- Check SMB shares status: `smbstatus`
-- List running apps: `midclt call app.query`
-- Check services: `systemctl list-units --type=service`
-- View system health: `midclt call system.general.ui_queries`
-- Check NFS exports: `showmount -e localhost`
-- Read logs: `journalctl`, `/var/log/` files
+**Allowed via CLI (read-only):**
+- `zpool status`, `zfs list`, `df -h`
+- `midclt call alert.query`, `midclt call app.query`
+- `smbstatus`, `showmount -e localhost`
+- `systemctl list-units --type=service`
+- `journalctl`, `/var/log/*`
 
-**BLOCKED Operations (Never execute on nas):**
-- `docker`, `docker-compose`, `docker rm`, `docker rmi` - use TrueNAS UI for apps
-- `apt install`, `apt remove`, `dpkg` - system package changes
-- `systemctl stop`, `systemctl start`, `systemctl restart` for system services
-- Any `zfs` write operations (`zfs create`, `zfs destroy`, `zfs snapshot`)
-- `rm`, `mv`, `cp` on system directories
+**Never run on nas:** `docker`/`docker-compose` commands, `apt install/remove`,
+`zfs create/destroy/snapshot`, `systemctl start/stop/restart`, `rm/mv/cp` on
+system paths, firewall changes. Apps, storage, and NPM configuration are all
+managed through the TrueNAS web UI.
+
+**If a blocked operation is requested:** explain that TrueNAS management goes
+through the web UI, and offer to check current status via CLI instead.
+
+### srv1, mnt1, sandbox (Ubuntu) — full management, roberto user
+
+**Allowed freely:**
+- Diagnostics: `uptime`, `df -h`, `free -h`, `lsblk`, `ps aux`, `top`, `ss`, `curl`, `ping`
+- `docker ps`, `docker logs`, `docker exec`, `docker compose ps/logs`
+- `journalctl`, `docker logs --tail`
+- `apt update` (checking for updates is safe)
+- Container lifecycle: `docker start/stop/restart`, `docker compose up -d`,
+  `docker compose down`, `docker compose restart`, and rebuilds
+  (`docker compose up -d --build`, `docker compose up -d --force-recreate`)
+
+**Requires confirmation (see template below):**
+- `apt upgrade`, `apt install`, `apt remove`/`purge`
+- `docker rm`, `docker rmi` (actually deleting a container/image, not just stopping/rebuilding it)
+- `systemctl restart/stop/disable` for any service
+- `rm -rf`, destructive `mv`
+- `reboot`/`shutdown`
 - Firewall changes (`ufw`, `iptables`)
-- Kernel parameter changes
 
-**If blocked operation requested:**
+**srv1-specific:** confirm you're not trying to hop *from* srv1 to another
+host — it can't, and the attempt will just hang until timeout.
+
+---
+
+## Docker Convention (srv1, mnt1, sandbox)
+
+Every container lives under **`/docker/<container-name>/`**, and every volume
+that container mounts must be a subdirectory of that same folder. No
+exceptions — don't mount volumes elsewhere on the filesystem.
+
 ```
-"I cannot perform that operation on nas. TrueNAS Scale management should be done via the TrueNAS web UI. Would you like me to check the current status instead?"
+/docker/<container-name>/
+  ├── docker-compose.yml     # required filename
+  ├── data/                  # example volume mount
+  ├── config/                # example volume mount
+  └── ...
 ```
 
-### srv1 (Ubuntu - Production)
-
-**Note on user context:** When you `ssh srv1`, you connect as `roberto`. If you later `sudo su` to become `root`, opencode will still find the same skills because `/root/.config/opencode` is a symlink to `/home/roberto/.config/opencode`. Both users share the same skill directory on srv1.
-
-**ALLOWED Operations:**
-- System info: `uname -a`, `uptime`, `who`
-- Disk/memory: `df -h`, `free -h`, `lsblk`
-- Package management: `apt update`, `apt upgrade`, `apt install`, `apt remove`
-- Service management: `systemctl status`, `systemctl stop/start/restart`
-- Docker: `docker ps`, `docker-compose up/down`, `docker exec`, `docker logs`
-- Code operations: `git pull`, file copy/move
-- Log analysis: `journalctl`, `/var/log/`, `docker logs`
-- Process management: `ps aux`, `top`, `htop`
-- Network: `ss`, `netstat`, `ping`, `curl`
-
-**Dangerous Operations (require confirmation):**
-See "Dangerous Operation Confirmation" section below.
-
-### mnt1 (Ubuntu - Test Server)
-
-**Note on Docker access:** If you get `permission denied while trying to connect to the docker API at unix:///var/run/docker.sock`, use `sudo` before the docker command (e.g., `sudo docker ps`) or ensure your user is in the `docker` group. Check with `groups roberto`.
-
-**ALLOWED Operations:**
-- All operations allowed on srv1
-- Docker installation and management
-- Testing new configurations
-
-**Docker Installation Rules:**
-- All Docker installations MUST be done starting from a subdirectory of `/docker`
-- In that subdirectory, create directories for all volumes mounted by the Docker
-- The subdirectory must contain the `docker-compose.yml` file for the Docker(s) being installed
-- Example structure:
-  ```
-  /docker/<service-name>/
-    ├── docker-compose.yml
-    ├── data/          (for volume mounts)
-    ├── workspace/     (for volume mounts)
-    └── ...
-  ```
-
-**Dangerous Operations (require confirmation):**
-See "Dangerous Operation Confirmation" section below.
+- Compose file is always named `docker-compose.yml` (not `compose.yaml`).
+- Before creating a new container, `ls /docker` to check naming collisions and existing conventions.
+- Manage with `docker compose` from inside `/docker/<container-name>/` (`ps`, `logs -f`, `restart`, `down`).
 
 ---
 
 ## Dangerous Operation Confirmation
 
-**CRITICAL RULE:** Before executing any dangerous operation, ALWAYS explain what you want to do and ask permission.
-
-### Confirmation Template
+Applies identically on srv1, mnt1, and sandbox — no server gets a pass.
 
 ```
 I'm going to [ACTION] on [SERVER].
 
-What this will do: [EXPLANATION of the effect]
-What this affects: [AFFECTED services/containers/data]
-Duration: [EXPECTED time]
+What this will do: [EFFECT]
+What this affects: [SERVICES/CONTAINERS/DATA]
+Duration: [EXPECTED TIME]
 
-Do you want me to proceed? (yes/no)
+Proceed? (yes/no)
 ```
 
-### Operations Requiring Confirmation
-
-| Operation | Example Commands |
-|-----------|------------------|
-| Package install | `apt install <package>` |
-| Package remove | `apt remove <package>`, `apt purge <package>` |
-| Docker container delete | `docker rm <container>` |
-| Docker image delete | `docker rmi <image>` |
-| Docker compose down | `docker-compose down` |
-| Service restart | `systemctl restart <service>` |
-| Service stop | `systemctl stop <service>` |
-| Service disable | `systemctl disable <service>` |
-| File/directory delete | `rm -rf <path>` |
-| Directory move | `mv <path> <new-path>` |
+| Operation | Example |
+|---|---|
+| Package install/remove | `apt install/remove/purge <pkg>` |
+| Package upgrade | `apt upgrade` |
+| Container/image delete | `docker rm`, `docker rmi` |
+| Service restart/stop/disable | `systemctl restart/stop/disable <svc>` |
+| Destructive file ops | `rm -rf <path>`, risky `mv` |
 | Reboot | `reboot`, `shutdown -r` |
-| Firewall changes | `ufw enable/disable`, `iptables` |
-| System-wide changes | `sysctl`, `modprobe`, kernel params |
-
----
-
-## Common Task Templates
-
-### System Information
-
-```bash
-# Quick system overview
-uptime && echo "---" && df -h && echo "---" && free -h
-```
-
-### Docker Operations (srv1, mnt1)
-
-```bash
-# List running containers
-docker ps
-
-# View container logs
-docker logs <container_name> --tail 50 -f
-
-# Execute command in container
-docker exec -it <container_name> <command>
-
-# Docker compose operations
-# mnt1:  /docker/<service>/
-cd <compose-directory>
-docker-compose ps
-docker-compose logs -f <service>
-docker-compose restart <service>
-```
-
-### Package Management (srv1, mnt1)
-
-```bash
-sudo apt update
-sudo apt upgrade
-sudo apt install <package-name>
-sudo apt remove <package-name>
-```
-
-### Log Analysis
-
-```bash
-journalctl -n 50
-journalctl -f
-journalctl -u <service-name> -n 50
-docker logs <container> --tail 100 -f
-```
-
-### TrueNAS Operations (nas only)
-
-```bash
-zpool status
-zfs list
-midclt call app.query
-smbstatus
-```
-
----
-
-## Server-Specific Skills Discovery
-
-When connecting to a server, ALWAYS check for and read skills at `~/.config/opencode/skills/` on that server. These skills are binding instructions and take priority over this file.
-
----
-
-## Safety Checklist Before Execution
-
-- [ ] Confirmed target server (nas, srv1, or mnt1)
-- [ ] Connected to server via SSH before formulating any plan or steps
-- [ ] Read and understood all server-specific skill directives
-- [ ] Verified operation is allowed on target server
-- [ ] For dangerous ops on srv1/mnt1: explained and got confirmation
-- [ ] For nas: verified operation is read-only
-- [ ] For mnt1 Docker: verified Docker files are in `/docker/<service>/` subdirectory
+| Firewall changes | `ufw`, `iptables` |
 
 ---
 
 ## Error Handling
 
-If an operation fails:
-1. Show the error message
-2. Explain what likely caused it
-3. Suggest remediation steps
-4. Ask if user wants to retry with different parameters
-
-If SSH connection fails:
-1. Verify the server alias is correct (nas, srv1, or mnt1)
-2. Check if SSH key is configured: `ssh-add -l`
-3. Check if the server is reachable: `ping <ip>`
+- SSH fails: verify alias (`srv1`/`mnt1`/`sandbox`/`nas`), check `ssh-add -l`,
+  and remember srv1 can only be reached directly, never via a mnt1/sandbox hop.
+- Command fails: show the error, explain the likely cause, suggest a fix,
+  ask before retrying with different parameters.
