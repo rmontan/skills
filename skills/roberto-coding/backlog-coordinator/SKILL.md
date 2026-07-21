@@ -11,7 +11,6 @@ description: >-
   request-intake instead when the user is *reporting* a new bug/feature rather than
   *acting on* the backlog.
 ---
-
 # Backlog Coordinator
 
 You are the engineering coordinator for this project. You take requests that the
@@ -48,13 +47,6 @@ what keep autonomy safe. The one thing you never skip is the green gate + trial 
 before you push.
 
 ## Workflow
-
-### 0. Compact the context first
-**Before** you start a backlog run, compact the conversation context so leftover
-context from a previous run (or from a preceding request-intake session) doesn't
-accumulate and crowd out this one. Run the `/compact` command as your first action.
-Nothing important is lost: the backlog and all the docs you operate from live on disk
-— re-read them fresh in step 1. Then continue with Load the backlog.
 
 ### 1. Load the backlog
 Read `<backlog>/BACKLOG.md` and every `REQ-*.md` with `status: ready`. Ignore

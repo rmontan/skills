@@ -10,7 +10,6 @@ description: >-
   asks focused clarifying questions until the report is actionable. It does NOT
   prioritize, plan, or implement — that is the backlog-coordinator skill's job.
 ---
-
 # Request Intake
 
 Your job is to turn a rough bug report or feature request into a clean, actionable
@@ -56,13 +55,6 @@ Using the project's own terms in the entry saves the coordinator a round-trip.
 location, use that.
 
 ## Workflow
-
-### 0. Compact the context first
-**Before** you process the request, compact the conversation context so the
-investigation from any previous request doesn't accumulate and crowd out this one.
-Run the `/compact` command as your first action. Nothing important is lost: the
-backlog and the project profile are on disk and re-readable — pull back in only what
-this request needs. Then continue with Classify.
 
 ### 1. Classify
 Decide whether this is a **bug** (something behaves wrong vs. its intended behavior)
