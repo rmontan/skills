@@ -8,7 +8,7 @@ description: |
   passwordless-sudo `roberto` user; nas is GUI-managed only, no CLI Docker/app changes.
 license: MIT
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
   category: infrastructure
   servers:
     srv1:
@@ -86,17 +86,33 @@ Parse the user's request to a single target: `srv1`, `mnt1`, `sandbox`, or `nas`
 If the task requires hopping between hosts (e.g. deploying from mnt1 to srv1),
 identify every hop up front — remember srv1 cannot initiate outbound hops.
 
-## Step 2: Connect and Confirm Location
+## Step 2: Every Remote Command Confirms Its Own Host
+
+There is no persistent SSH session across commands — each command you run
+starts a fresh, non-interactive shell, so a bare `ssh <target>` in one
+command does **not** keep you "connected" for the next one. Never assume
+you're still on `<target>` because an earlier command connected to it; that
+assumption is exactly how a command silently runs on the wrong box (or
+locally) instead of the intended server.
+
+Run remote work as a single non-interactive SSH invocation, one host per
+command, and confirm location inline:
 
 ```bash
-ssh <target>
-hostname   # confirm you actually landed where you intended
+ssh <target> 'hostname && <command>'
 ```
 
-Do this **once per session**, right after connecting — not before every
-individual command. If you hop between hosts mid-session (e.g. mnt1 → srv1),
-re-run `hostname` after each hop, since it's easy to lose track of which box
-a shell is on.
+For a sequence of related commands on the same host, chain them inside the
+*same* `ssh` invocation rather than splitting across separate commands and
+relying on a prior one to have left you "there":
+
+```bash
+ssh <target> 'cd /docker/foo && docker compose ps'
+```
+
+If a task hops across hosts (e.g. mnt1 → srv1), each hop needs its own
+explicit `ssh <hop>` — confirm the hostname at every hop, never by chaining
+off a previous command's connection.
 
 ## Step 3: Execute the Task
 
