@@ -86,7 +86,36 @@ Parse the user's request to a single target: `srv1`, `mnt1`, `sandbox`, or `nas`
 If the task requires hopping between hosts (e.g. deploying from mnt1 to srv1),
 identify every hop up front — remember srv1 cannot initiate outbound hops.
 
-## Step 2: Every Remote Command Confirms Its Own Host
+## Step 2: Check Whether You Are Already On The Target
+
+**Do not assume the session is running on the Mac.** Claude Code sessions also
+run *on* srv1, mnt1, and sandbox. If you are already on the target host, `ssh
+<target> '...'` is a pointless self-hop — and it will usually fail, because the
+`~/.ssh/id_ed25519` on those hosts is passphrase-encrypted and no ssh-agent is
+available in a non-interactive session. The error looks like an access problem
+but isn't:
+
+```
+roberto@mnt1: Permission denied (publickey).
+```
+
+So before building any remote command, establish where you are:
+
+```bash
+hostname
+```
+
+- **Already on the target** → run the command **directly**, no `ssh` wrapper:
+  `docker ps`, not `ssh mnt1 'docker ps'`.
+- **On the Mac, or on a different host** → use the SSH form in Step 3.
+
+A quick way to make a command work from either place:
+
+```bash
+[ "$(hostname)" = "mnt1" ] && docker ps || ssh mnt1 'docker ps'
+```
+
+## Step 3: Every Remote Command Confirms Its Own Host
 
 There is no persistent SSH session across commands — each command you run
 starts a fresh, non-interactive shell, so a bare `ssh <target>` in one
@@ -114,7 +143,7 @@ If a task hops across hosts (e.g. mnt1 → srv1), each hop needs its own
 explicit `ssh <hop>` — confirm the hostname at every hop, never by chaining
 off a previous command's connection.
 
-## Step 3: Execute the Task
+## Step 4: Execute the Task
 
 Apply the server-specific rules below. For dangerous operations, always use
 the confirmation template regardless of which server (srv1, mnt1, sandbox all
@@ -282,7 +311,15 @@ dumping the whole file, and don't echo secret values back into chat or logs.
 
 ## Error Handling
 
-- SSH fails: verify alias (`srv1`/`mnt1`/`sandbox`/`nas`), check `ssh-add -l`,
-  and remember srv1 can only be reached directly, never via a mnt1/sandbox hop.
+- `Permission denied (publickey)` when connecting **from** srv1/mnt1/sandbox:
+  first check you aren't self-hopping (`hostname` — see Step 2). If the target
+  really is another host, the cause is almost always the key choice: those hosts
+  keep a passphrase-encrypted copy of the Mac key at `~/.ssh/id_ed25519` that
+  cannot be used non-interactively. Host-to-host hops must use the unencrypted
+  `~/.ssh/id_ed25519_h2h` key, set per-host in `~/.ssh/config` with
+  `IdentityFile ~/.ssh/id_ed25519_h2h` + `IdentitiesOnly yes`.
+- SSH fails otherwise: verify alias (`srv1`/`mnt1`/`sandbox`/`nas`), check
+  `ssh-add -l`, and remember srv1 can only be reached directly, never via a
+  mnt1/sandbox hop.
 - Command fails: show the error, explain the likely cause, suggest a fix,
   ask before retrying with different parameters.
