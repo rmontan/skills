@@ -54,11 +54,60 @@ Use the profile's `<dispatch>` mode:
 
 The prompt must be self-contained and include: worktree/branch, scope + ownership
 boundary, acceptance criteria, "add unit tests for new logic", the green-gate
-requirement, and "commit locally; do not push/PR". Match the project's work-package
-style guide if it has one.
+requirement, "commit locally; do not push/PR", **and the definition-of-done checklist
+below, verbatim.** Match the project's work-package style guide if it has one.
 
 Run agents for disjoint scopes in parallel; serialize anything sharing files or the
 single schema-migration slot.
+
+### Definition of done — paste into every WP prompt verbatim
+
+§3 below is the coordinator's own post-hoc verification checklist. Give the agent the
+*same* checklist as part of its own definition of done, so it self-verifies before
+handing back instead of the coordinator discovering the gap afterward and paying for a
+re-dispatch round-trip. This is not belt-and-suspenders: across real dispatches, agents
+have repeatedly reported "tests pass" or "no gaps" while under-reporting their own test
+counts, missing named acceptance criteria, and once, twice in a row, renaming an
+*existing* test to make an unmet criterion look covered. §3's checks exist because none
+of that surfaced until the coordinator re-ran them independently — asking the agent to
+run them first is strictly cheaper than a round-trip, and catches most of it before the
+coordinator ever needs to look.
+
+> Before you report this work package done:
+> 1. Run `<install>` and `<gate>` yourself. If it fails, fix it and re-run — keep
+>    iterating until it's actually green. Don't hand back a red or unverified result
+>    on the theory that the coordinator will catch it; that costs a full round-trip.
+> 2. If the profile records a test-count/coverage baseline, run its check command and
+>    paste the output. Never hand-count or estimate your own test total — every WP
+>    that has, under-reported.
+> 3. For every **named** acceptance criterion in the REQ (a `Test...`-shaped bullet),
+>    confirm the exact function exists in your delivered tree, e.g.:
+>    `git grep -n -E '^func (TestNamedCriterionOne|TestNamedCriterionTwo)\('`
+>    (substitute the real names, and the language's own idiom if not Go). If a
+>    criterion is already covered by an existing test, say so explicitly and cite
+>    it — do **not** rename an existing test to make it look like new coverage; that
+>    gets caught and reverted, and costs more time than admitting it was covered.
+> 4. If you deleted or renamed any test you didn't write this session, justify every
+>    one in your report. An unexplained disappearance is treated as a verification
+>    failure, not an oversight.
+> 5. **If this work package's scope spans more than one implementation of the same
+>    interface** (e.g. several provider/connector/adapter implementations behind one
+>    seam), add a test **per implementation**, not one test against whichever one you
+>    happened to exercise first. A fix proven against one implementation and silently
+>    wrong for the others is the most expensive class of bug this process produces —
+>    invisible to a single-target gate, and it only surfaces later, in someone else's
+>    integration.
+> 6. **If this work package's scope touches a live external integration** (a real
+>    provider/API/service the gate deliberately fakes), write the live-only test now —
+>    gated out of the regular run (e.g. a build tag) even though you cannot execute it
+>    against the real service yourself. A green hermetic gate proves the code is
+>    *correct*; it never proves it *works* against the real permissions/contract the
+>    fakes stand in for. Leaving that test unwritten turns a one-line addition now into
+>    a live-integration debt someone has to notice missing later, often only by running
+>    the real thing by hand.
+> 7. State plainly in your final report which of 1–6 applied and what you ran — not
+>    just "tests pass" or "no gaps found." A claim without the command that backs it is
+>    exactly what has gone wrong before.
 
 ## 3. Verifying a finished WP
 From inside the WP's worktree:

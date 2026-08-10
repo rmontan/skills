@@ -101,8 +101,11 @@ Group the prioritized work into WPs sized for one coding agent each:
   most one schema-touching WP per parallel wave so migration numbers don't collide).
 - Each WP prompt must state: the worktree + branch, the scope and ownership boundary,
   the acceptance criteria (copy from the REQ), the requirement to add **unit tests**
-  for new logic, the green-gate requirement, and **"commit locally; do NOT push or
-  open a PR"** (you own integration).
+  for new logic, the green-gate requirement, **"commit locally; do NOT push or
+  open a PR"** (you own integration), and the **definition-of-done checklist**
+  (`references/dispatch-playbook.md` §2) verbatim — it hands the agent the same
+  self-check you'd otherwise have to run yourself at step 6, so gaps surface in the
+  agent's own turn instead of a re-dispatch round-trip.
 - A WP usually maps to one REQ, but may bundle tightly-related REQs or split a large
   REQ. Record the chosen `wp:` slug in each REQ's frontmatter and set its
   `status: in-progress`.
@@ -115,7 +118,10 @@ disjoint scopes in parallel where it's safe; serialize anything that shares file
 the one schema slot. Agents commit locally and do not push.
 
 ### 6. Verify each WP
-Before integrating, for each completed WP (see the playbook for commands):
+Run this regardless of what the agent reported — step 4's definition-of-done checklist
+makes the agent self-check first, which should shrink what you find here, but "the
+agent says it self-checked" is still not the same as verified. Before integrating, for
+each completed WP (see the playbook for commands):
 - **Ownership check** — the agent only touched its declared scope; composition roots
   untouched.
 - **Migration check** — per the profile's schema rule.
