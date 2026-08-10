@@ -78,6 +78,25 @@ A WP should add tests, never silently drop coverage (compare against the profile
 baseline test counts if it records them). If verification fails, re-dispatch with the
 precise failure as feedback instead of hand-patching.
 
+### Named acceptance tests and test renames
+The coordinator must also verify the test-shaped criteria against the REQ, rather than
+trusting the agent's final report:
+
+```bash
+# Replace the names with every named Test... criterion in the REQ.
+git grep -n -E '^func (TestNamedCriterionOne|TestNamedCriterionTwo)\(' HEAD -- '*_test.go'
+
+# Review every test declaration deleted from a touched test file.
+git diff --unified=0 origin/main...HEAD -- '*_test.go' \
+  | grep '^-' | grep -E '^-[[:space:]]*func Test' || true
+```
+
+Every named criterion must have a test function in the delivered tree. If the function
+already existed on `origin/main`, verify that it already proves the criterion and record
+that fact; do not ask the agent to duplicate or rename it. Every deleted `Test...`
+declaration must be justified. An unexplained missing criterion or test disappearance is
+a verification failure and should be returned to the WP with the precise finding.
+
 ## 4. Trial 3-way merge
 Branches often have a stale base. Prove the merge is clean in a throwaway worktree
 before touching `<main>`:
