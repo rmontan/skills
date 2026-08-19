@@ -10,7 +10,7 @@ description: >-
   silently killing in-flight background work.
 license: MIT
 metadata:
-  version: 1.0.0
+  version: 1.1.0
   category: infrastructure
   author: Roberto
 ---
@@ -196,6 +196,39 @@ Respawning below. This is intentional — auto-restarting on crash risks
 masking a real problem in a restart loop; a visible dead pane is easier to
 diagnose than a symptom that silently disappears.
 
+## Known Trade-off: Every Restart Duplicates the Target Entry
+
+Confirmed by watching `claude-rc.service` do its job after an actual mnt1
+reboot: **every fresh `claude rc` launch — manual respawn or the automatic
+systemd one after a reboot — mints a brand-new environment registration**
+with Anthropic's backend, each with its own `env_...` ID and its own
+`?environment=` connect URL. There is no local cache of a prior environment
+ID to resume, and `claude remote-control --help` has no
+`--environment-id`/resume-style flag — only `--name`, which sets the
+*display* name shown in claude.ai/code, not a stable identity (untested
+whether reusing the same `--name` on every launch causes the backend to
+update the old entry in place rather than adding a new one — don't assume
+it dedupes).
+
+**Effect the user will see:** claude.ai/code and the mobile app accumulate
+one target entry per restart, all appearing to be "the same server" (mnt1),
+even though only the most recent one is ever actually live. This is not a
+bug to chase down server-side — checked directly: at any given time there is
+exactly one live `claude rc` process and one live tmux session on the host.
+The duplication is purely account-side list state that outlives the process
+it pointed to.
+
+**There is nothing to fix from the server.** Confirm which entry is current
+by re-running Step 5 and reading the `environment=env_...` value out of the
+tmux pane — that's the only live one. The others are safe to remove/dismiss
+directly in the claude.ai/code or mobile app UI; there's no SSH-reachable
+way to do that from this end.
+
+**Set expectations up front** whenever you set this up or respawn it: tell
+the user a new connect link is coming and the old one (and any old target
+list entries) will need manual cleanup on their end — don't let them
+discover the duplication on their own and think something's broken.
+
 ## Respawning
 
 When the user says "respawn claude rc" (or the pane in `claude-rc` is dead),
@@ -272,6 +305,15 @@ denied`
 issue — root also gets denied.
 **Solution:** Don't try to work around it. Use the kill-and-relaunch path in
 Respawning instead, after checking for in-flight work.
+
+**Error:** The same server (e.g. mnt1) shows up more than once in the
+claude.ai/code or mobile app target list.
+**Cause:** Expected, not a bug — see "Known Trade-off" above. Every restart
+(manual or the automatic post-reboot one) mints a new environment
+registration; old ones aren't cleaned up automatically.
+**Solution:** Get the current live `environment=env_...` URL from the tmux
+pane (Step 5) and tell the user that's the one to use. Stale entries can
+only be removed from the app UI itself, not from the server.
 
 **Error:** Mac/mobile app doesn't show the server as a remote target, even
 though claude.ai/code (web) can see and control it.
