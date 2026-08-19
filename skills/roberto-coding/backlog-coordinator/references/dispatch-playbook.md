@@ -15,7 +15,7 @@ Placeholders used below:
 
 ## Table of contents
 1. Worktree setup
-2. Dispatching a coding agent
+2. Dispatching a coding agent (opencode data-dir isolation, concurrency cap)
 3. Verifying a finished WP
 4. Trial 3-way merge
 5. Integration (coordinator-owned wiring)
@@ -42,11 +42,12 @@ open a PR — integration is the coordinator's job.
 
 Use the profile's `<dispatch>` mode:
 
-- **External CLI** (e.g. opencode) — run the profile's command from inside the
-  worktree, for example:
+- **External CLI** (e.g. opencode) — give the instance its **own isolated data dir**
+  (see below — required, not optional), then run the profile's command from inside
+  the worktree, for example:
   ```bash
   cd .worktrees/<wp>
-  opencode run "<work-package prompt>" -m <model> --dangerously-skip-permissions
+  XDG_DATA_HOME="<isolated-data-dir-from-below>" opencode run "<work-package prompt>" -m <model> --dangerously-skip-permissions
   ```
 - **Claude subagents** — launch the `Agent` tool (general-purpose) with the
   work-package prompt; have it commit locally in the worktree.
@@ -57,8 +58,42 @@ boundary, acceptance criteria, "add unit tests for new logic", the green-gate
 requirement, "commit locally; do not push/PR", **and the definition-of-done checklist
 below, verbatim.** Match the project's work-package style guide if it has one.
 
-Run agents for disjoint scopes in parallel; serialize anything sharing files or the
-single schema-migration slot.
+### Isolate opencode's data dir (required for the opencode dispatch mode)
+opencode's session store (`~/.local/share/opencode/opencode.db`) is a single global
+SQLite database with **no per-project or per-worktree isolation**. When several
+opencode processes run concurrently against it, they contend for the same file and
+one crashes with `Error: Failed to execute statement` — an opencode-internal crash in
+its backing store, not a problem with the WP's work; it can happen mid-edit on an
+otherwise-sane change. This has been observed with as few as 7 concurrent opencode
+processes.
+
+Give **every** opencode-dispatched WP its own store by pointing `XDG_DATA_HOME` at a
+per-WP directory, seeded with the existing auth so the instance stays logged in. Do
+this every time you dispatch via opencode, not just when running several in
+parallel — it costs nothing when running solo and removes the failure mode entirely
+when concurrent:
+
+```bash
+# from the repo root, before cd-ing into the worktree
+OC_DATA="$(pwd)/.worktrees/.opencode-data/<wp>"
+mkdir -p "$OC_DATA/opencode"
+cp ~/.local/share/opencode/auth.json ~/.local/share/opencode/account.json "$OC_DATA/opencode/"
+
+cd .worktrees/<wp>
+XDG_DATA_HOME="$OC_DATA" opencode run "<work-package prompt>" -m <model> --dangerously-skip-permissions
+```
+`.worktrees/.opencode-data/<wp>` is a sibling of the WP worktrees, so it's covered by
+the same `.worktrees/` gitignore/exclude entry from step 1 and needs no separate
+cleanup — remove it along with `.worktrees/` (or per-WP as each worktree is torn
+down).
+
+### Cap concurrency
+Even with isolated stores, don't fire every disjoint WP at once — each opencode/agent
+process is a real CPU/memory/API-rate cost, and a large batch dying together (e.g.
+overnight) is harder to triage. Dispatch in **batches of 2–3 concurrent WPs**,
+letting a batch finish (or fail cleanly) before starting the next, unless the profile
+specifies a different limit. Serialize anything sharing files or the single
+schema-migration slot regardless of batch size.
 
 ### Definition of done — paste into every WP prompt verbatim
 

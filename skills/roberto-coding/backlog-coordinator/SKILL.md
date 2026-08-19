@@ -117,6 +117,13 @@ external CLI such as opencode, or the `Agent` tool, or by-hand). Launch agents f
 disjoint scopes in parallel where it's safe; serialize anything that shares files or
 the one schema slot. Agents commit locally and do not push.
 
+**If the dispatch mode is opencode**, give each instance its own `XDG_DATA_HOME`
+(playbook step 2) — opencode's session store is one shared global SQLite file with no
+per-process isolation, and concurrent instances contend on it and crash mid-edit with
+`Error: Failed to execute statement` (an opencode-internal failure, not a bad WP).
+Also cap concurrency to 2-3 WPs at a time rather than dispatching the whole wave at
+once.
+
 ### 6. Verify each WP
 Run this regardless of what the agent reported — step 4's definition-of-done checklist
 makes the agent self-check first, which should shrink what you find here, but "the
