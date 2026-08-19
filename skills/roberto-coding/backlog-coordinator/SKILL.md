@@ -55,6 +55,14 @@ has unresolved **Open questions** that block design, either resolve them from th
 codebase/docs yourself or, if they truly need the user, surface them and skip that
 item for this run rather than guessing.
 
+**Scan for file overlap across the `ready` set** before you prioritize: compare each
+entry's `areas:` frontmatter (grep the codebase directly if an entry lacks one or the
+field is stale) and flag any two or more `ready` REQs that touch the same file or a
+tightly-scoped shared package. Also read each entry's Notes for a pre-existing
+`Coordinator note` that already flags a batching or sequencing opportunity — a prior
+run may have left one. Carry this overlap map into step 4; it's the main input for
+deciding what to bundle.
+
 ### 2. Prioritize
 Assign each `ready` item a priority `p0`–`p3` and order the run:
 - **p0** data loss, security/privacy exposure, or app broken for all users.
@@ -107,7 +115,13 @@ Group the prioritized work into WPs sized for one coding agent each:
   self-check you'd otherwise have to run yourself at step 6, so gaps surface in the
   agent's own turn instead of a re-dispatch round-trip.
 - A WP usually maps to one REQ, but may bundle tightly-related REQs or split a large
-  REQ. Record the chosen `wp:` slug in each REQ's frontmatter and set its
+  REQ. **REQs that share a file per the step 1 overlap scan are strong bundling
+  candidates** — a coding agent that has already read and understood a file can apply
+  several small changes to it in one pass more cheaply than two agents independently
+  reviewing the same file in separate WPs. Bundle them unless doing so would break
+  disjoint ownership or mix unrelated risk profiles (e.g. a data-loss-critical path
+  bundled with a cosmetic change); if you choose to sequence instead of bundle, say
+  why. Record the chosen `wp:` slug in each REQ's frontmatter and set its
   `status: in-progress`.
 
 ### 5. Dispatch (dev + unit testing)
