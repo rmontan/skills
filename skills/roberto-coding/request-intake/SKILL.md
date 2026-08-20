@@ -8,7 +8,9 @@ description: >-
   nice if...", or "the app does X but should do Y" — even if they don't say the
   word "backlog". This skill records the request under the backlog directory and
   asks focused clarifying questions until the report is actionable. It does NOT
-  prioritize, plan, or implement — that is the backlog-coordinator skill's job.
+  prioritize, plan, or implement — that is the backlog-coordinator skill's job. Also
+  use this whenever the user wants to "process the queue", "drain the inbox", or work
+  through items saved earlier by the request-queue skill.
 ---
 # Request Intake
 
@@ -54,7 +56,39 @@ Using the project's own terms in the entry saves the coordinator a round-trip.
 **Backlog location:** default `docs/backlog/`. If the profile names a different
 location, use that.
 
+**Inbox location:** `<backlog>/inbox/`. Items dropped there by the `request-queue`
+skill are pending reports waiting to be turned into `REQ-*.md` entries — see §0.
+
 ## Workflow
+
+### 0. Check the queue first
+Before treating the conversation as the source of a new report, check whether you
+were invoked to drain the queue — the user says "process the queue," "drain the
+inbox," "work through what's queued," or similar — or whether `<backlog>/inbox/`
+simply has files in it and the user hasn't pasted a fresh report of their own.
+
+If there's queue work to do:
+1. List `<backlog>/inbox/*.md`, oldest first (the filename timestamp sorts naturally).
+2. Take the oldest (or the one the user names) and read it. Its body — the verbatim
+   text under the frontmatter — is the report; treat it exactly as you'd treat a
+   report the user just typed, and feed it into **step 2 (Capture what you were
+   given)** below. Its `attachments:` frontmatter lists any screenshots saved
+   alongside it in the same inbox directory; treat those as if the user had just
+   attached them.
+3. Run the rest of the workflow (§1–§6) normally against that content — classify,
+   clarify with the user, propose if warranted, write the `REQ-*.md` file.
+4. Once the `REQ-*.md` file is written, delete the queue `.md` file. If it had
+   attachments, move them alongside the new REQ (e.g. reference them from the
+   entry's **Notes** section with a relative path) rather than leaving orphans in
+   `inbox/`.
+5. If several items are queued, process one at a time and confirm each (§6) before
+   moving to the next — don't silently batch through all of them unless the user
+   explicitly asked you to process the whole queue in one pass.
+
+If the inbox is empty and there's no fresh report either, say so and stop — nothing
+to do. If there's both a fresh report in the conversation and a non-empty queue,
+default to the fresh report (it's what the user is actively talking about) and
+mention the queue has pending items, rather than silently ignoring either.
 
 ### 1. Classify
 Decide whether this is a **bug** (something behaves wrong vs. its intended behavior)
@@ -130,7 +164,9 @@ proposal with its open choice and set the entry accordingly.
 - Set `status: ready` if the entry meets the actionable bar, or `status: clarifying`
   if you're still waiting on the user for a blocking answer.
 - Set `reporter` to the user's email if known, else `unknown`. Set `created` to
-  today's date (YYYY-MM-DD).
+  today's date (YYYY-MM-DD). When draining a queue item, carry over its `reporter:`
+  and use its `queued:` date for `created` instead — that's when the report actually
+  came in, not when you happened to process it.
 - Add a one-line row to `<backlog>/BACKLOG.md` under the index table. If that file
   doesn't exist, create it with the header from `assets/request-template.md`'s index
   snippet.
@@ -154,3 +190,7 @@ promise a timeline or priority — that's the coordinator's call.
   flagging it, not vetoing it, is your role.
 - One request per file. If the user dumps several unrelated issues in one message,
   split them into separate `REQ-` entries.
+- **Don't leave the inbox in a half-drained state.** A queue item is either still
+  sitting in `<backlog>/inbox/` untouched, or it's been turned into a `REQ-*.md` file
+  and removed from the inbox — never both a leftover queue file and a written REQ for
+  the same report.
