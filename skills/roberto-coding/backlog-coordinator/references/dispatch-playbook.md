@@ -36,6 +36,13 @@ git worktree add .worktrees/<wp> -b wp-<wp> origin/<main>
 ```
 `<wp>` is the slug recorded in the REQ's `wp:` field, e.g. `req0007`.
 
+**Fast path.** For a REQ that qualifies under the SKILL's fast-path rule (small,
+low-risk, single-file, no composition-root/schema touch), skip §2 (dispatch) entirely:
+make the change yourself in this same worktree, commit it, and go straight to §3.
+Still run §3's verification even though you wrote the change — the gate rerun and the
+named-criterion check catch mechanical slips a same-sitting self-review misses, and
+they're the cheap part; the agent round-trip was the expensive part this path removes.
+
 ## 2. Dispatching a coding agent
 Run from **inside** the WP's worktree. The agent commits locally; it does NOT push or
 open a PR — integration is the coordinator's job.
@@ -107,6 +114,17 @@ counts, missing named acceptance criteria, and once, twice in a row, renaming an
 of that surfaced until the coordinator re-ran them independently — asking the agent to
 run them first is strictly cheaper than a round-trip, and catches most of it before the
 coordinator ever needs to look.
+
+**Calibrate item 5's pinning-test rigor to risk, not uniformly.** The full
+per-named-criterion pinning test is warranted whenever the WP touches a path the
+profile's domain invariants call out (data-loss, security, privacy, or a similarly
+load-bearing correctness path) — keep it at full strength there regardless of diff
+size. For a purely cosmetic or copy-only change, a lighter check (or none) is
+proportionate; forcing a bespoke pinning test onto a two-line CSS fix has, in practice,
+cost more than the fix itself once a shifted line number cascades into unrelated
+line-range-based waivers elsewhere in the same file. When in doubt, treat it as
+load-bearing and keep the full checklist — this calibration is permission to go
+lighter on low-stakes changes, not a default toward skipping it.
 
 > Before you report this work package done:
 > 1. Run `<install>` and `<gate>` yourself. If it fails, fix it and re-run — keep

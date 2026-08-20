@@ -113,7 +113,13 @@ Group the prioritized work into WPs sized for one coding agent each:
   open a PR"** (you own integration), and the **definition-of-done checklist**
   (`references/dispatch-playbook.md` §2) verbatim — it hands the agent the same
   self-check you'd otherwise have to run yourself at step 6, so gaps surface in the
-  agent's own turn instead of a re-dispatch round-trip.
+  agent's own turn instead of a re-dispatch round-trip. **Calibrate item 5's per-criterion
+  pinning-test rigor to the profile's domain invariants** — full weight for a WP touching
+  a data-loss/security/privacy-critical path, lighter for a purely cosmetic or
+  copy-only change. Applying the heavy version everywhere has a real cost beyond the
+  agent's own time: a pinning test that shifts line numbers in a shared test file can
+  cascade into unrelated edits (e.g. line-range duplication waivers) that have nothing
+  to do with the fix.
 - A WP usually maps to one REQ, but may bundle tightly-related REQs or split a large
   REQ. **REQs that share a file per the step 1 overlap scan are strong bundling
   candidates** — a coding agent that has already read and understood a file can apply
@@ -123,6 +129,21 @@ Group the prioritized work into WPs sized for one coding agent each:
   bundled with a cosmetic change); if you choose to sequence instead of bundle, say
   why. Record the chosen `wp:` slug in each REQ's frontmatter and set its
   `status: in-progress`.
+- **Default to holding `p2`/`p3` cosmetic or single-file REQs for bundling** rather
+  than giving them a solo WP, even when nothing in the current wave overlaps them yet —
+  wait for the next WP that touches their file/area rather than dispatching them alone.
+  A solo WP pays the full worktree + dispatch + verify + trial-merge + PR + CI cost
+  regardless of diff size; riding inside a WP that's paying that cost anyway is close
+  to free. Only dispatch one solo if it's blocking or none is in sight for a while.
+- **Fast path for small, low-risk REQs** (`p2`/`p3`, single-file, doesn't touch a
+  composition root or the schema): the coordinator may implement it directly in the
+  WP's worktree instead of writing a dispatch prompt and invoking an agent — skip
+  straight from worktree setup to the change itself. Still run the full definition-of-done
+  checklist yourself (`references/dispatch-playbook.md` §2), still do the trial merge,
+  and still go through PR → CI → merge exactly as for a dispatched WP — none of that is
+  the expensive part; the round-trip through a separate agent process and its own
+  self-verification pass is. Use judgement: if you're not confident you understand the
+  fix as well as an agent that read the surrounding code would, dispatch instead.
 
 ### 5. Dispatch (dev + unit testing)
 For each WP, per `references/dispatch-playbook.md`: create the dedicated worktree,
