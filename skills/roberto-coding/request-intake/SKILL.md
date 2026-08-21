@@ -155,12 +155,38 @@ question. Never let validation block capture: if the user isn't available, recor
 proposal with its open choice and set the entry accordingly.
 
 ### 5. Write the backlog file
-- Find the next ID: scan the backlog dir for the highest `REQ-NNNN` and add 1. Start
-  at `REQ-0001` if none exist. Zero-pad to 4 digits.
-- Create `<backlog>/REQ-<NNNN>-<short-kebab-slug>.md` from the template in
-  `assets/request-template.md`. Fill every section you can; leave coordinator-owned
-  fields (`priority`, `wp`) unset. If you did §4, fill the optional **Proposed
-  approach** section; otherwise delete it.
+
+**Reserve the ID under a lock — don't just scan-then-write.** Two `request-intake`
+sessions can run at the same time against the same backlog (different terminals,
+different agents). A bare "scan for highest, add 1" has a race: both sessions can
+scan before either writes, see the same highest number, and collide on the same
+`REQ-NNNN`. Use an atomic `mkdir` lock to close that window:
+
+1. Draft the full entry content first (frontmatter + body) so the only thing left to
+   do under the lock is pick the number and write the file — keep the critical
+   section short.
+2. Acquire the lock: retry-loop `mkdir <backlog>/.req-lock` (mkdir is atomic — it
+   fails if the directory already exists, so exactly one concurrent session wins).
+   - On failure, check the lock's age (`stat -c %Y <backlog>/.req-lock`, or `%m` on
+     BSD/macOS `stat`). If it's older than 120 seconds, treat it as abandoned by a
+     crashed/killed session, `rmdir` it, and retry the `mkdir` immediately.
+   - Otherwise back off briefly (e.g. 1–2s) and retry. Don't spin tight.
+3. While holding the lock: scan the backlog dir for the highest `REQ-NNNN`, add 1
+   (start at `REQ-0001` if none exist, zero-pad to 4 digits), and immediately write
+   `<backlog>/REQ-<NNNN>-<short-kebab-slug>.md` with the full drafted content. The
+   file landing on disk *is* the reservation — as soon as it exists, the next
+   session's scan will see it and skip past it.
+4. Release the lock: `rmdir <backlog>/.req-lock`. Do this even if the write failed
+   (wrap in a way that guarantees cleanup) — a stuck lock blocks every session until
+   the 120s staleness window passes.
+
+Everything else about the entry (clarifying questions, proposed approach, BACKLOG.md
+row, telling the user) happens outside the lock — only the id-scan-and-create step
+needs to be atomic.
+
+- Fill every section you can in the template from `assets/request-template.md`; leave
+  coordinator-owned fields (`priority`, `wp`) unset. If you did §4, fill the optional
+  **Proposed approach** section; otherwise delete it.
 - Set `status: ready` if the entry meets the actionable bar, or `status: clarifying`
   if you're still waiting on the user for a blocking answer.
 - Set `reporter` to the user's email if known, else `unknown`. Set `created` to
