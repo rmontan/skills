@@ -158,31 +158,69 @@ proposal with its open choice and set the entry accordingly.
 
 **Reserve the ID under a lock — don't just scan-then-write.** Two `request-intake`
 sessions can run at the same time against the same backlog (different terminals,
-different agents). A bare "scan for highest, add 1" has a race: both sessions can
-scan before either writes, see the same highest number, and collide on the same
-`REQ-NNNN`. Use an atomic `mkdir` lock to close that window:
+different agents) — and so can a `backlog-coordinator` session, reading and
+committing to the very same `BACKLOG.md` while you're mid-conversation with the
+user. A bare "scan for highest, add 1" has a race: both sessions can scan before
+either writes, see the same highest number, and collide on the same `REQ-NNNN`.
+Use an atomic `mkdir` lock to close that window — and use the **same** critical
+section to make the REQ file and its `BACKLOG.md` row appear together, atomically,
+so nothing outside this skill ever observes one without the other:
 
 1. Draft the full entry content first (frontmatter + body) so the only thing left to
-   do under the lock is pick the number and write the file — keep the critical
-   section short.
+   do under the lock is pick the number, write the file, update the index, and
+   commit — keep the critical section short, but do not split it across a
+   conversation turn.
 2. Acquire the lock: retry-loop `mkdir <backlog>/.req-lock` (mkdir is atomic — it
    fails if the directory already exists, so exactly one concurrent session wins).
    - On failure, check the lock's age (`stat -c %Y <backlog>/.req-lock`, or `%m` on
      BSD/macOS `stat`). If it's older than 120 seconds, treat it as abandoned by a
      crashed/killed session, `rmdir` it, and retry the `mkdir` immediately.
    - Otherwise back off briefly (e.g. 1–2s) and retry. Don't spin tight.
-3. While holding the lock: scan the backlog dir for the highest `REQ-NNNN`, add 1
-   (start at `REQ-0001` if none exist, zero-pad to 4 digits), and immediately write
-   `<backlog>/REQ-<NNNN>-<short-kebab-slug>.md` with the full drafted content. The
-   file landing on disk *is* the reservation — as soon as it exists, the next
-   session's scan will see it and skip past it.
-4. Release the lock: `rmdir <backlog>/.req-lock`. Do this even if the write failed
-   (wrap in a way that guarantees cleanup) — a stuck lock blocks every session until
-   the 120s staleness window passes.
+3. **While holding the lock, do all four of the following before releasing it:**
+   a. Scan the backlog dir for the highest `REQ-NNNN`, add 1 (start at `REQ-0001`
+      if none exist, zero-pad to 4 digits), and write
+      `<backlog>/REQ-<NNNN>-<short-kebab-slug>.md` with the full drafted content.
+   b. Re-read `<backlog>/BACKLOG.md` fresh (don't reuse a copy read before you
+      acquired the lock — another session may have committed to it in the
+      meantime) and append the one-line index row under the table. If the file
+      doesn't exist, create it with the header from
+      `assets/request-template.md`'s index snippet.
+   c. **If this is a git repository** (`git rev-parse --is-inside-work-tree`
+      succeeds): commit the new REQ file and the `BACKLOG.md` change **together,
+      in one commit, right now** — `git add <backlog>/REQ-<NNNN>-*.md
+      <backlog>/BACKLOG.md && git commit -m "backlog: file REQ-<NNNN> — <short
+      title>"` (match the project's own commit-message convention if
+      `docs/backlog/PROJECT.md` or `CLAUDE.md` documents one). **Stage only those
+      two paths — never `-A` or a bare `git add .`** A coordinator session may
+      have unrelated uncommitted edits elsewhere in the tree (or even mid-edit in
+      `BACKLOG.md` itself); an intake commit must never sweep those up. If
+      `git diff --cached <backlog>/BACKLOG.md` shows anything beyond the one row
+      you just appended, someone else's uncommitted edit is sitting in that file
+      — reset just that path (`git restore --staged --worktree
+      <backlog>/BACKLOG.md`), re-read it fresh, reapply only your row, and retry.
+      If the commit itself fails (hook rejection, nothing staged, etc.), don't
+      retry in a loop — surface the failure in your confirmation to the user
+      instead of leaving the files staged-but-uncommitted indefinitely.
+      If this is not a git repository, skip (c) silently and continue.
+   d. Release the lock: `rmdir <backlog>/.req-lock`.
 
-Everything else about the entry (clarifying questions, proposed approach, BACKLOG.md
-row, telling the user) happens outside the lock — only the id-scan-and-create step
-needs to be atomic.
+   Do this even if a step failed partway (wrap in a way that guarantees the lock
+   is released) — a stuck lock blocks every session until the 120s staleness
+   window passes.
+
+**Why this matters beyond ID collisions:** the REQ file and its `BACKLOG.md` row
+are one logical unit — `check-backlog`-style gates (and a coordinator reading the
+index) treat a row with no file, or a file with no row, as broken state. Committing
+them together, inside the same lock used for the ID reservation, means no other
+process — another intake session or a coordinator mid-bookkeeping-commit — can ever
+observe or accidentally commit half of this update. This replaces an earlier
+version of this skill that left the file and row uncommitted for the rest of the
+conversation (clarifying questions, proposed approach, confirmation); a coordinator
+session committing its own `BACKLOG.md` changes in that window once picked up an
+in-progress row with no backing file and shipped a broken `main`. **When draining a
+queue** (§0), this means commit after *each* item, not batched at the end of the
+run — a crash mid-queue must never leave more than one item's worth of uncommitted
+backlog state.
 
 - Fill every section you can in the template from `assets/request-template.md`; leave
   coordinator-owned fields (`priority`, `wp`) unset. If you did §4, fill the optional
@@ -193,16 +231,15 @@ needs to be atomic.
   today's date (YYYY-MM-DD). When draining a queue item, carry over its `reporter:`
   and use its `queued:` date for `created` instead — that's when the report actually
   came in, not when you happened to process it.
-- Add a one-line row to `<backlog>/BACKLOG.md` under the index table. If that file
-  doesn't exist, create it with the header from `assets/request-template.md`'s index
-  snippet.
 
 ### 6. Confirm
 Tell the user the ID, the classification, the status, and the file path (as a
 clickable link). If status is `clarifying`, state plainly what's still needed. If you
 wrote a **Proposed approach**, say so in one line and note it's the coordinator's to
-confirm (or, if you validated a choice with the user, that it's recorded). Don't
-promise a timeline or priority — that's the coordinator's call.
+confirm (or, if you validated a choice with the user, that it's recorded). In a git
+repo, mention that it's committed (not just written) — that's what makes it safe for
+a coordinator to act on immediately. Don't promise a timeline or priority — that's
+the coordinator's call.
 
 ## Boundaries
 - **Never** prioritize, estimate effort, assign a work package, or start coding here.

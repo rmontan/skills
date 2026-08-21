@@ -245,3 +245,34 @@ After merge, for each delivered REQ:
 - Update its row in `<backlog>/BACKLOG.md` (status + PR link in Notes if useful).
 - If the work surfaced new issues, file them as new `REQ-*.md` entries (same format
   as the request-intake template) so nothing is lost.
+
+### A concurrent request-intake session can be writing to the same backlog
+`request-intake` sessions run independently of the coordinator — a different
+terminal, a different agent, often the user actively filing reports while you work
+a wave. As of the current `request-intake` skill, each request it files is
+committed atomically (REQ file + `BACKLOG.md` row, one commit) the moment it's
+written, which closes most of the risk. But you can still observe a window between
+"they wrote it" and "they committed it," and the reverse has already caused a real
+incident once: a coordinator's own commit picked up an in-progress `BACKLOG.md`
+row with no REQ file behind it (via a blanket `git add docs/backlog/BACKLOG.md`)
+and shipped a `check-backlog`-failing `main`.
+
+Before every coordinator commit that touches `<backlog>/BACKLOG.md` or any
+`REQ-*.md` file:
+- **Never `git add -A` or a bare `git add <path>` on a shared backlog file without
+  checking first.** Run `git status --short <backlog>/` immediately before staging.
+  If it shows untracked `REQ-*.md` files or a `BACKLOG.md` diff you didn't just
+  make yourself, that's someone else's in-flight work — don't fold it into your
+  commit on a guess.
+- If it's safe and clearly complete (a well-formed REQ file with full frontmatter,
+  matching its own `BACKLOG.md` row) and leaving it split across commits would
+  itself leave `main` gate-red, committing it alongside yours is the right call —
+  better than a broken `main` — but say so explicitly in the commit message rather
+  than silently absorbing it.
+- Otherwise, `git stash push -u -- docs/backlog/` before your own edits, make your
+  clean commit, then `git stash pop` to restore their in-progress state exactly as
+  you found it — never delete or overwrite content you didn't author without being
+  asked.
+- After any rebase/pull in the shared checkout, re-run `make check-backlog` before
+  pushing — it's the one check that would have caught this class of break, and it's
+  cheap enough to run on every backlog-touching commit, not just at wave boundaries.
