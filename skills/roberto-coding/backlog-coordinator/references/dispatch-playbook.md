@@ -57,7 +57,21 @@ Use the profile's `<dispatch>` mode:
   XDG_DATA_HOME="<isolated-data-dir-from-below>" opencode run "<work-package prompt>" -m <model> --dangerously-skip-permissions
   ```
 - **Claude subagents** — launch the `Agent` tool (general-purpose) with the
-  work-package prompt; have it commit locally in the worktree.
+  work-package prompt; have it commit locally in the worktree. **Do not pass
+  `isolation: "worktree"` (or `"remote"`) on this call.** That parameter creates a
+  *second*, harness-managed worktree (`.claude/worktrees/agent-<id>`, branch
+  `worktree-agent-<id>`) and silently confines the agent's git/filesystem access to
+  it — the WP prompt's instruction to `cd` into `.worktrees/<wp>` and commit on
+  `wp-<wp>` then can't actually be followed, because step 1's worktree already
+  provides the isolation this mode needs. Observed twice in one dispatch wave
+  (2026-08-23): both agents committed real, correct work onto the auto-created
+  branch instead of the assigned one, and one also produced a confusing early stub
+  response before a real final report followed on the same task-id — plausibly the
+  same conflict, not a separate bug. Leave `isolation` unset; if it happens anyway,
+  recover with `git diff <base>..<agent-commit>` / `git cherry-pick` onto the
+  correct WP branch, then re-run the full verification in §3 yourself before
+  trusting it — don't take the agent's own gate/test claims for a worktree it
+  couldn't actually reach as-instructed.
 - **By hand** — implement the WP yourself in the worktree, committing locally.
 
 The prompt must be self-contained and include: worktree/branch, scope + ownership
