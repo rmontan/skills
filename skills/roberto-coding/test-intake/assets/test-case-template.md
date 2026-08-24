@@ -3,7 +3,7 @@ Template for a single test-catalog entry. Copy the frontmatter + body below into
 <catalog>/TEST-<NNNN>-<slug>.md and fill it in.
 
 Status values:
-  active   — release-gate should run this
+  active   — test-run should run this
   draft    — being built, not yet confirmed to run cleanly
   retired  — no longer relevant (say why in Notes); keep the file for history
 -->
@@ -63,7 +63,7 @@ before running this check.>
 # Test Catalog
 
 Index of all registered checks. Source of truth is each `TEST-*.md` file; this table
-is a scannable summary maintained by the `test-intake` and `release-gate` skills.
+is a scannable summary maintained by the `test-intake` and `test-run` skills.
 
 | ID | Tier | Title | Status | Last run | Result |
 |----|------|-------|--------|----------|--------|

@@ -1,5 +1,5 @@
 ---
-name: release-gate
+name: test-run
 description: >-
   Run the project's registered test catalog (docs/testing/, built by test-intake) —
   every deterministic check first (plain scripts, zero inference cost), then AI-graded
@@ -10,7 +10,7 @@ description: >-
   "run the regression suite", "run the test suite", or "check the app before we
   deploy".
 ---
-# Release Gate
+# Test Run
 
 You run the project's standing test catalog and report what broke. You do not fix
 anything — a failure becomes a REQ in the product backlog (via `request-intake`) for
@@ -38,7 +38,7 @@ cost to justify skipping any, and a partial deterministic run tells you less tha
 full one for free. Capture pass/fail and the raw output per check.
 
 ### 3. Run AI-graded checks — only as scoped, cheap tier before strong tier
-If the user asked for a full release-gate run, run both AI tiers. If they scoped the
+If the user asked for a full test-run, run both AI tiers. If they scoped the
 ask (e.g. "just run the fast checks" or "skip the AI-graded ones"), respect that —
 these are the ones with a real per-run cost, so don't run them speculatively.
 

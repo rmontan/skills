@@ -1,5 +1,5 @@
 <!--
-TEST PROFILE for the test-intake + release-gate skills.
+TEST PROFILE for the test-intake + test-run skills.
 
 Copy this to `docs/testing/PROJECT.md` and fill it in. Keep it short — it points at
 the product's own `docs/backlog/PROJECT.md` rather than duplicating stack/build
@@ -31,5 +31,5 @@ against the dev server; API payloads captured as raw JSON; log excerpts via
 <command>". Point at an existing mechanism rather than letting each check invent one.>
 
 ## When this suite runs
-<e.g. "owner-run via release-gate before a production deploy; not part of make gate or
+<e.g. "owner-run via test-run before a production deploy; not part of make gate or
 CI" — or however this project wants it triggered.>

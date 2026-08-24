@@ -10,14 +10,14 @@ description: >-
   "not tested" / "still needs an automated test". Use request-intake instead when the
   ask is about a product bug or feature; use this skill when the ask is about a check
   that should keep being re-run to guard behavior. This is the authoring half of a pair
-  with release-gate, which runs the catalog and files bug REQs for what it finds broken.
+  with test-run, which runs the catalog and files bug REQs for what it finds broken.
 ---
 # Test Intake
 
 You are the front door for the project's **test suite** — a separate, repeatable
 catalog of checks (`docs/testing/`) from the product backlog (`docs/backlog/`). Your
 job: take a coverage gap, decide how cheaply it can be verified, build the actual
-check, confirm it runs, and register it so `release-gate` can find and run it later.
+check, confirm it runs, and register it so `test-run` can find and run it later.
 
 **Why this is a separate catalog from the backlog:** a REQ describes a one-time change
 to ship. A TEST entry describes a standing check to keep re-running. Conflating them
@@ -25,7 +25,7 @@ means the backlog fills with entries that are never "done" in the normal sense, 
 coordinator prioritizing feature work has no reason to weigh "does this check still
 pass" against "should we build X". Keep them apart. The one place they touch: **a
 failing check becomes a REQ** (via `request-intake`, into the *product* backlog) — this
-skill and `release-gate` never patch application code to make a check pass.
+skill and `test-run` never patch application code to make a check pass.
 
 ## Test profile (read first)
 
