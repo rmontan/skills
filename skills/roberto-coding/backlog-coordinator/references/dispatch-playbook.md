@@ -165,13 +165,21 @@ lighter on low-stakes changes, not a default toward skipping it.
 >    invisible to a single-target gate, and it only surfaces later, in someone else's
 >    integration.
 > 6. **If this work package's scope touches a live external integration** (a real
->    provider/API/service the gate deliberately fakes), write the live-only test now —
->    gated out of the regular run (e.g. a build tag) even though you cannot execute it
->    against the real service yourself. A green hermetic gate proves the code is
->    *correct*; it never proves it *works* against the real permissions/contract the
->    fakes stand in for. Leaving that test unwritten turns a one-line addition now into
->    a live-integration debt someone has to notice missing later, often only by running
->    the real thing by hand.
+>    provider/API/service the gate deliberately fakes), write the live-only test now,
+>    gated out of the regular run (e.g. a build tag). A green hermetic gate proves the
+>    code is *correct*; it never proves it *works* against the real
+>    permissions/contract the fakes stand in for. Leaving that test unwritten turns a
+>    one-line addition now into a live-integration debt someone has to notice missing
+>    later, often only by running the real thing by hand.
+>
+>    **Whether you can also *run* it depends on the project.** Check the profile: some
+>    withhold live credentials from dispatched agents deliberately (a secret in reach
+>    of `--dangerously-skip-permissions` and a written report is how one leaks), others
+>    grant them — e.g. because the credential only reaches disposable test data. If the
+>    profile gives you credentials and a way to run a single live test, **run yours and
+>    report what it showed.** If it doesn't, write the test anyway and say plainly in
+>    your report that it is unexecuted, so the coordinator knows to run it before the
+>    request is closed. Never imply a live test passed when you only wrote it.
 > 7. State plainly in your final report which of 1–6 applied and what you ran — not
 >    just "tests pass" or "no gaps found." A claim without the command that backs it is
 >    exactly what has gone wrong before.

@@ -195,6 +195,36 @@ smoke / e2e docs:
   **domain invariants** the profile lists. If anything fails, loop back to step 5/6
   for the responsible WP.
 
+#### Live verification, before closing — not after
+**If the profile defines a targeted live-test command** (one test or one area against
+the real external service, rather than the full suite), run it for every REQ that
+touches that integration, and do it *before* step 9 sets `status: done`.
+
+A hermetic gate exercises every external integration against a fake, so it proves the
+code is self-consistent with somebody's belief about the wire format. It cannot fail
+when that belief is wrong. Only a live run can.
+
+The failure mode to avoid is not skipping the live test outright — it is deferring it.
+A full live suite is usually slow, quota-bound and noisy, so "verify live" becomes a
+closing ritual, and requests accumulate in a half-closed status
+(`merged (live test pending)` or similar) that no check enforces because no check
+matches on it. Observed in practice: two requests parked that way for days, and when
+the live tests were finally run they surfaced an active production outage the gate was
+structurally incapable of seeing and no dashboard had flagged.
+
+- Use the **targeted** command, not the full sweep. If the profile doesn't define one,
+  say so in your report — making per-REQ live verification cheap is usually a small,
+  high-value piece of harness work.
+- Record what the run showed in whatever field the profile requires (e.g. a
+  `live_test:` line), and record it **from the run's own output**, not from memory of
+  it. A summary of a run nobody can re-read is a claim, not evidence.
+- **Absence of failure is not a pass.** Confirm the test actually executed — a name
+  typo, a build tag, or an empty package list can all produce a green-looking "no tests
+  to run". Check the count, not just the exit code.
+- If a live run is genuinely blocked (credentials expired, provider deferred, quota
+  exhausted), say so explicitly in the report and leave the REQ open. Do not close it
+  and rely on someone noticing later.
+
 ### 9. Push, PR, CI, merge (per profile policy)
 Only if the profile's operating mode allows it; otherwise stop and hand off. When it
 does:
@@ -204,6 +234,11 @@ does:
   re-dispatch, then re-push — do not merge red.
 - Merge once green. Then set each delivered REQ's `status: done` and update the
   `<backlog>/BACKLOG.md` index row.
+- **Do not use a half-closed status to skip step 8's live verification.** If a REQ
+  touches a live integration and the run hasn't happened, either run it now or leave
+  the REQ open with the reason stated. A status like `merged (live test pending)` is a
+  queue, not a resting place — and it typically sits outside whatever check enforces
+  the closing rules, since those match on `done`.
 
 ### 10. Report
 Summarize: which REQs shipped (with PR links), which were deferred and why, any new

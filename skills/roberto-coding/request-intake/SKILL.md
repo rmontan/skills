@@ -162,9 +162,42 @@ different agents) — and so can a `backlog-coordinator` session, reading and
 committing to the very same `BACKLOG.md` while you're mid-conversation with the
 user. A bare "scan for highest, add 1" has a race: both sessions can scan before
 either writes, see the same highest number, and collide on the same `REQ-NNNN`.
-Use an atomic `mkdir` lock to close that window — and use the **same** critical
-section to make the REQ file and its `BACKLOG.md` row appear together, atomically,
-so nothing outside this skill ever observes one without the other:
+
+**This race is worse than one working directory.** The project convention is one
+dedicated `git worktree` per work package (`.worktrees/<wp>`), and a local
+`mkdir` lock scoped to `<backlog>/` only closes the window between sessions
+sharing *that* directory. Two sibling worktrees each scanning their own checkout
+of `docs/backlog/` can independently land on the same "highest + 1" — neither
+sees the REQ the other just wrote, because it hasn't reached either of their
+branches yet. That's a real collision that has happened in practice, not a
+theoretical one.
+
+**Reserve the number with this skill's `scripts/reserve-req-id.sh` instead of
+scanning.**
+
+> **The script ships with this skill — it is not in the target project.** Resolve it
+> relative to this SKILL.md's own directory, not the repo you're filing into. Written
+> bare as `scripts/reserve-req-id.sh`, it reads as repo-relative, and an agent working
+> in a project checkout looks for `./scripts/reserve-req-id.sh`, doesn't find it, and
+> silently falls back to scan-then-write — which is the exact collision this section
+> exists to prevent. Confirmed happening in a real project (2026-08-26): every intake
+> run there had been scanning, and nobody knew, because the fallback is quiet.
+> If you genuinely cannot locate the script, **say so in your report** and note that
+> the number was scanned rather than reserved.
+
+It takes its lock on a counter file under the shared `.git` directory
+(`git rev-parse --git-common-dir`) rather than inside any one worktree — every
+worktree of the same clone already shares that directory, so the reservation is
+visible to every sibling worktree immediately, regardless of which branch each
+has checked out. Run it, then use the printed number for everything below.
+`flock` makes the read-increment-write atomic, so the conflict window is
+sub-second rather than however long a session takes to draft and commit. It does
+not cover two genuinely separate clones (e.g. different machines) reserving at
+the same instant — accepted as out of scope for now.
+
+Still use the `mkdir` lock for the **rest** of the critical section below — making
+the REQ file and its `BACKLOG.md` row appear together, atomically, so nothing
+outside this skill ever observes one without the other:
 
 1. Draft the full entry content first (frontmatter + body) so the only thing left to
    do under the lock is pick the number, write the file, update the index, and
@@ -177,9 +210,13 @@ so nothing outside this skill ever observes one without the other:
      crashed/killed session, `rmdir` it, and retry the `mkdir` immediately.
    - Otherwise back off briefly (e.g. 1–2s) and retry. Don't spin tight.
 3. **While holding the lock, do all four of the following before releasing it:**
-   a. Scan the backlog dir for the highest `REQ-NNNN`, add 1 (start at `REQ-0001`
-      if none exist, zero-pad to 4 digits), and write
-      `<backlog>/REQ-<NNNN>-<short-kebab-slug>.md` with the full drafted content.
+   a. Run **this skill's** `scripts/reserve-req-id.sh <backlog>` (see the note
+      above — it is not in the target repo) to get the number (zero-pad to 4
+      digits) and write `<backlog>/REQ-<NNNN>-<short-kebab-slug>.md` with the
+      full drafted content. Run this *inside* the `mkdir` lock too, even though
+      it has its own internal lock — that keeps the number reservation and the
+      file write ordered against each other within this worktree, and costs
+      nothing since the script returns in well under a second.
    b. Re-read `<backlog>/BACKLOG.md` fresh (don't reuse a copy read before you
       acquired the lock — another session may have committed to it in the
       meantime) and append the one-line index row under the table. If the file

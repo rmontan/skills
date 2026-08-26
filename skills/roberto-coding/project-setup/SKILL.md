@@ -82,9 +82,12 @@ Create this layout (omit pieces that don't fit the target type; keep the `docs/`
 │   ├── INTEGRATION.md        # how integration is done here (stub)
 │   ├── E2E_TESTING.md        # e2e harness + how to run it (stub)
 │   ├── SMOKE.md              # quick smoke checks (stub)
-│   └── backlog/
-│       ├── PROJECT.md        # profile read by request-intake + backlog-coordinator
-│       └── BACKLOG.md        # index table (from the request-intake template snippet)
+│   ├── backlog/
+│   │   ├── PROJECT.md        # profile read by request-intake + backlog-coordinator
+│   │   └── BACKLOG.md        # index table (from the request-intake template snippet)
+│   └── testing/
+│       ├── PROJECT.md        # test profile read by test-intake + test-run
+│       └── CATALOG.md        # index of standing checks (empty table to start)
 ├── .worktrees/              # per-WP worktrees for parallel agents (gitignored)
 └── src/                      # or the stack-appropriate source skeleton
 ```
@@ -102,15 +105,64 @@ Create this layout (omit pieces that don't fit the target type; keep the `docs/`
 
 ### 4. Write the project profile
 This is the linchpin that makes the global backlog skills work. Create
-`docs/backlog/PROJECT.md` from the canonical template at
-`~/.claude/skills/request-intake/assets/project-profile-template.md`, filling every
-field from the interview: identity, locations, stack & layout, build/verify gate,
-dispatch mode + model, composition roots, domain invariants, locked decisions, and
-delivery/merge policy. Where a value isn't known yet, leave the template's placeholder
-and note it — don't invent a build command that doesn't exist.
+`docs/backlog/PROJECT.md` from the canonical template `assets/project-profile-template.md`
+inside the **sibling `request-intake` skill**.
 
-Create `docs/backlog/BACKLOG.md` from the index-table snippet at the bottom of
-`~/.claude/skills/request-intake/assets/request-template.md` (header + empty table).
+> Resolve that by locating `request-intake` next to this skill's own directory rather
+> than typing an absolute path — installs rename skills
+> (`roberto-coding__request-intake` under `~/.claude/skills/`,
+> `roberto-coding/request-intake` in the skillshare source), so a hardcoded path goes
+> stale silently. This step previously read
+> `~/.claude/skills/request-intake/assets/…`, which resolves to nothing on a
+> skillshare-managed install. If you can't find the template, **say so rather than
+> improvising** — the profile's field names are what every other skill reads.
+
+Fill every field from the interview: identity, locations, stack & layout, build/verify
+gate, dispatch mode + model, composition roots, domain invariants, locked decisions,
+and delivery/merge policy. Where a value isn't known yet, leave the template's
+placeholder and note it — don't invent a build command that doesn't exist.
+
+**Also record how an external integration gets verified** — and if there is none yet,
+say that explicitly rather than omitting it. Once the project does talk to a real
+provider/API, this is where `backlog-coordinator` looks for:
+- the **full** live-suite command;
+- a **targeted** one (a single test or area). This is what makes per-request live
+  verification cheap enough to run *before* closing rather than after merging — a
+  project with only a slow full sweep reliably defers it, and half-closed requests
+  accumulate;
+- whether dispatched agents get live credentials, and if not, why not.
+
+Create `docs/backlog/BACKLOG.md` from the index-table snippet at the bottom of the same
+skill's `assets/request-template.md` (header + empty table).
+
+### 4b. Write the test profile
+`test-intake` and `test-run` read **`docs/testing/PROJECT.md`**, and `test-run` requires
+it. This skill used to scaffold neither, so a freshly set-up project could not run its
+own test skills until someone hand-wrote the profile — and nothing said that anywhere.
+
+Create `docs/testing/PROJECT.md` from `assets/test-profile-template.md` in the sibling
+**`test-intake`** skill (same resolution caveat as step 4 — find it next to this
+skill's directory, don't hardcode a path), plus `docs/testing/CATALOG.md` with an empty
+index table. `test-intake` can also scaffold the profile later on demand, so this step
+is about not leaving a new project in a state where `test-run` simply stops.
+
+Keep it short; a stub is fine, but it must exist and must name:
+
+- **Catalog dir** and a pointer back to `docs/backlog/PROJECT.md`.
+- **Tier → execution mapping** — which checks are plain scripts (no model call) and
+  which need AI grading, at which model tier. Keeping inference spend deliberate is the
+  point of the split.
+- **Test fixtures** — where throwaway accounts/data live, how to reset them, and which
+  identity is the designated target. **Record this in one committed place and derive
+  everything else from it.** Fixture identity duplicated across a profile, an env file
+  and scattered request notes will drift, and the copies disagreeing is not detectable
+  by anything — a real incident, with a destructive test aimed at the wrong account.
+- **Ownership** — whether a bug in a *test artifact* is fixed directly or has to go
+  through the product backlog. Routing a one-line harness fix through request authoring
+  and WP dispatch adds latency for no safety benefit, but the line has to be drawn
+  explicitly or everything drifts to one side.
+- **When the suite runs** — on demand, pre-deploy, in CI. If it touches real external
+  services it generally should not be in the green gate.
 
 ### 5. Source skeleton (light)
 Lay down a minimal, runnable skeleton appropriate to the stack and target type — just
