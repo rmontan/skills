@@ -129,15 +129,13 @@ Group the prioritized work into WPs sized for one coding agent each:
   the acceptance criteria (copy from the REQ), the requirement to add **unit tests**
   for new logic, the green-gate requirement, **"commit locally; do NOT push or
   open a PR"** (you own integration), and the **definition-of-done checklist**
-  (`references/dispatch-playbook.md` §2) verbatim — it hands the agent the same
-  self-check you'd otherwise have to run yourself at step 7, so gaps surface in the
-  agent's own turn instead of a re-dispatch round-trip. **Calibrate item 5's per-criterion
-  pinning-test rigor to the profile's domain invariants** — full weight for a WP touching
-  a data-loss/security/privacy-critical path, lighter for a purely cosmetic or
-  copy-only change. Applying the heavy version everywhere has a real cost beyond the
-  agent's own time: a pinning test that shifts line numbers in a shared test file can
-  cascade into unrelated edits (e.g. line-range duplication waivers) that have nothing
-  to do with the fix.
+  (`references/dispatch-playbook.md` §2's Definition-of-done subsection) verbatim —
+  it hands the agent the same self-check you'd otherwise have to run yourself at
+  step 7, so gaps surface in the agent's own turn instead of a re-dispatch
+  round-trip. **Calibrate item 5's per-criterion pinning-test rigor to the profile's
+  domain invariants** — full weight for a WP touching a data-loss/security/privacy-
+  critical path, lighter for a purely cosmetic or copy-only change (full reasoning,
+  and the cost of over-applying it: that same playbook subsection).
 - A WP usually maps to one REQ, but may bundle tightly-related REQs or split a large
   REQ. **REQs that share a file per the step 1 overlap scan are strong bundling
   candidates** — a coding agent that has already read and understood a file can apply
@@ -166,7 +164,8 @@ Group the prioritized work into WPs sized for one coding agent each:
   may implement it directly in the WP's worktree instead of writing a dispatch prompt
   and invoking an agent — skip straight from worktree setup to the change itself.
   Still run the full definition-of-done checklist yourself
-  (`references/dispatch-playbook.md` §2), still do the trial merge, and still go
+  (`references/dispatch-playbook.md` §2's Definition-of-done subsection), still do
+  the trial merge, and still go
   through PR → CI → merge exactly as for a dispatched WP — none of that is the
   expensive part; the round-trip through a separate agent process and its own
   self-verification pass is. Use judgement: if you're not confident you understand the
@@ -221,12 +220,13 @@ profile defines tiers, the specific tier that step 5's complexity score selects.
 agents for disjoint scopes in parallel where it's safe; serialize anything that
 shares files or the one schema slot. Agents commit locally and do not push.
 
+**Cap concurrency regardless of dispatch mode** — dispatch in batches rather than
+firing the whole wave at once (playbook §2 has the batch size and the reasoning).
+
 **If the dispatch mode is opencode**, give each instance its own `XDG_DATA_HOME`
 (playbook step 2) — opencode's session store is one shared global SQLite file with no
 per-process isolation, and concurrent instances contend on it and crash mid-edit with
 `Error: Failed to execute statement` (an opencode-internal failure, not a bad WP).
-Also cap concurrency to 2-3 WPs at a time rather than dispatching the whole wave at
-once.
 
 ### 7. Verify each WP
 Run this regardless of what the agent reported — step 4's definition-of-done checklist
