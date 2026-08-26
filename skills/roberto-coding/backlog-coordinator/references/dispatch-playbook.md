@@ -47,7 +47,25 @@ they're the cheap part; the agent round-trip was the expensive part this path re
 Run from **inside** the WP's worktree. The agent commits locally; it does NOT push or
 open a PR — integration is the coordinator's job.
 
-Use the profile's `<dispatch>` mode:
+### Picking the tier (if the profile defines them)
+Some profiles split `<dispatch>` into complexity tiers instead of one fixed
+mode/command — e.g. a cheap/fast model for a WP the SKILL's step 5 scored 1-2, a
+mid-tier model for 3-4, a frontier model reserved for the single hardest band, 5.
+When the profile's Dispatch section has a tiers table, look up the WP's complexity
+score there and use that row's mode/command/model for everything below, in place of
+the profile's single `<dispatch>`/`<model>`. A tiers table looks like:
+
+```
+- Complexity 1-2 (simple): <mode>, <command/model>
+- Complexity 3-4 (moderate/complex): <mode>, <command/model>
+- Complexity 5 (hard): <mode>, <command/model>
+```
+
+When the profile has no tiers table, use its single mode/model as before — tiers are
+opt-in per project, not a required profile field, and there's nothing to pick between
+if it only defines one.
+
+Use the profile's `<dispatch>` mode (or the tier-selected one):
 
 - **External CLI** (e.g. opencode) — give the instance its **own isolated data dir**
   (see below — required, not optional), then run the profile's command from inside

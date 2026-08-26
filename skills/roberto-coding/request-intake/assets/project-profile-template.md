@@ -35,6 +35,13 @@ than duplicating it here.
 ## Dispatch (how the coordinator delegates a work package)
 - **Mode:** <one of: opencode CLI | Claude subagents (Agent tool) | manual/by hand>
 - **Command / model (if a CLI):** <e.g. opencode run "<prompt>" -m opencode-go/minimax-m3 --dangerously-skip-permissions>
+<!-- Optional: route dispatch by the coordinator's 1-5 WP complexity score instead of
+     one fixed mode/model — e.g. a cheap/fast model for simple WPs, a frontier one
+     reserved for genuinely hard work. Delete the block above and use this instead if
+     you want tiered dispatch; leave it out to use one mode/model for everything. -->
+- **Complexity 1-2 (simple):** <e.g. opencode CLI — opencode run "<prompt>" -m opencode-go/minimax-m3 --dangerously-skip-permissions>
+- **Complexity 3-4 (moderate/complex):** <e.g. Claude subagents (Agent tool), model: sonnet>
+- **Complexity 5 (hard):** <e.g. Claude subagents (Agent tool), model: opus>
 - **Coordinator-owned composition roots:** <files only the coordinator edits when wiring, e.g. workers/src/index.ts, apps/api/src/server.ts>
 
 ## Domain invariants to verify (and to flag at intake)

@@ -46,6 +46,24 @@ through merge* (you may push, open PRs, wait for CI, and merge without pausing),
 what keep autonomy safe. The one thing you never skip is the green gate + trial merge
 before you push.
 
+## On-demand: list the ready queue (no dispatch)
+When asked to show or list the open/ready requests — "what's in the backlog", "list
+open reqs", "show the ready queue" — without a broader instruction to build or ship,
+run a **read-only preview** instead of the full workflow below: step 1 (load +
+overlap scan) and step 2 (prioritize), plus the bundling from step 4 and the
+complexity scoring from step 5. Then stop.
+
+- Don't create worktrees, dispatch agents, push, or write frontmatter back to any
+  REQ — this is a preview, not a commitment. (Step 2's "write the priority back"
+  instruction applies to the full workflow, not this mode.)
+- Present a table: REQ id, title, priority, proposed WP grouping (which REQs you'd
+  bundle into one WP and why — the file/area overlap from step 1's scan), and the
+  **complexity score (1-5)** for the resulting WP per step 5's rubric. If the
+  profile defines dispatch tiers, add which tier/model each WP would route to.
+- End by asking which (if any) to actually build, or wait for a separate instruction
+  to proceed — don't fall through into dispatching just because you already did the
+  analysis.
+
 ## Workflow
 
 ### 1. Load the backlog
@@ -104,7 +122,7 @@ the audit trail reflect what was actually decided.
 Group the prioritized work into WPs sized for one coding agent each:
 - **Disjoint ownership.** Each WP owns a clear set of files/areas so parallel agents
   don't collide. The profile's **composition roots** are coordinator-owned; agents
-  expose dependencies, you wire them (step 7). State this boundary in every WP prompt.
+  expose dependencies, you wire them (step 8). State this boundary in every WP prompt.
 - **Schema rule.** Follow the profile's migration rule (typically additive-only, at
   most one schema-touching WP per parallel wave so migration numbers don't collide).
 - Each WP prompt must state: the worktree + branch, the scope and ownership boundary,
@@ -112,7 +130,7 @@ Group the prioritized work into WPs sized for one coding agent each:
   for new logic, the green-gate requirement, **"commit locally; do NOT push or
   open a PR"** (you own integration), and the **definition-of-done checklist**
   (`references/dispatch-playbook.md` §2) verbatim — it hands the agent the same
-  self-check you'd otherwise have to run yourself at step 6, so gaps surface in the
+  self-check you'd otherwise have to run yourself at step 7, so gaps surface in the
   agent's own turn instead of a re-dispatch round-trip. **Calibrate item 5's per-criterion
   pinning-test rigor to the profile's domain invariants** — full weight for a WP touching
   a data-loss/security/privacy-critical path, lighter for a purely cosmetic or
@@ -154,12 +172,54 @@ Group the prioritized work into WPs sized for one coding agent each:
   self-verification pass is. Use judgement: if you're not confident you understand the
   fix as well as an agent that read the surrounding code would, dispatch instead.
 
-### 5. Dispatch (dev + unit testing)
+### 5. Score complexity and pick an agent tier
+Score every WP (not every REQ — a bundle gets one score for the group as delivered)
+**1-5** on how demanding it is to build correctly:
+
+- **1 — Trivial.** Cosmetic/copy, single file, no branching logic, no new
+  abstraction, no composition-root/schema/domain-invariant touch. Usually fast-path
+  eligible (step 4).
+- **2 — Simple.** Small, well-scoped change, a couple of files, follows an existing
+  pattern directly, no schema or composition-root touch, doesn't touch a
+  domain-invariant-critical path.
+- **3 — Moderate.** Several files/areas, or a straightforward additive schema
+  change, or touches one domain-invariant-critical path but with clear precedent
+  already in the codebase to follow.
+- **4 — Complex.** Cross-cutting across multiple implementations behind one
+  interface (e.g. every provider connector), a real design decision the REQ didn't
+  already settle, or combines a composition-root change with a
+  domain-invariant-critical path.
+- **5 — Hard.** High ambiguity, novel design/architecture, concurrency or
+  race-condition reasoning, or a bundle whose REQs interact in ways that must be
+  reasoned about together rather than independently.
+
+Bundling raises the score (more context, more surface to hold at once) but a bundle
+is usually still cheaper than the sum of its parts dispatched solo — score what the
+WP actually asks the agent to deliver, not the max of its parts taken naively, and
+say why in one line.
+
+Record the score in the WP prompt and in each covered REQ's Notes (`Coordinator
+note: WP complexity N/5 — <one-line reason>`) so a later run doesn't re-derive it.
+
+**If the profile defines dispatch tiers** (a mapping from complexity band to
+mode/command/model — `references/dispatch-playbook.md` §2), the score is what
+selects the tier in step 6: typically a cheap/fast model for 1-2, a mid-tier model
+for 3-4, and the most capable (and most expensive) model reserved for 5 alone —
+genuinely hard work, not "whatever the highest score in this wave happened to be."
+If the profile has no tiers, the score is still worth recording — it's cheap, and
+useful the next time someone reads this REQ — but route every WP through the
+profile's single dispatch mode as before; don't invent a tier mapping the profile
+doesn't have. If the user asks for tiered dispatch and the profile doesn't define
+one, offer to write it (the request-intake template's Dispatch section has the
+format) rather than guessing model names yourself.
+
+### 6. Dispatch (dev + unit testing)
 For each WP, per `references/dispatch-playbook.md`: create the dedicated worktree,
 then run the coding agent from inside it using the profile's **dispatch mode** (an
-external CLI such as opencode, or the `Agent` tool, or by-hand). Launch agents for
-disjoint scopes in parallel where it's safe; serialize anything that shares files or
-the one schema slot. Agents commit locally and do not push.
+external CLI such as opencode, or the `Agent` tool, or by-hand) — and, if the
+profile defines tiers, the specific tier that step 5's complexity score selects. Launch
+agents for disjoint scopes in parallel where it's safe; serialize anything that
+shares files or the one schema slot. Agents commit locally and do not push.
 
 **If the dispatch mode is opencode**, give each instance its own `XDG_DATA_HOME`
 (playbook step 2) — opencode's session store is one shared global SQLite file with no
@@ -168,7 +228,7 @@ per-process isolation, and concurrent instances contend on it and crash mid-edit
 Also cap concurrency to 2-3 WPs at a time rather than dispatching the whole wave at
 once.
 
-### 6. Verify each WP
+### 7. Verify each WP
 Run this regardless of what the agent reported — step 4's definition-of-done checklist
 makes the agent self-check first, which should shrink what you find here, but "the
 agent says it self-checked" is still not the same as verified. Before integrating, for
@@ -189,25 +249,25 @@ Surface what happened (what the agent produced or didn't, the specific failure) 
 the user decide whether to re-dispatch, take it over by hand, or stop. Do not silently
 loop the dispatch.
 
-### 7. Integrate
+### 8. Integrate
 Do the reserved composition-root wiring yourself (the files the profile marks
 coordinator-owned). Resolve cross-WP conflicts. Keep these edits minimal and
 coordinator-scoped.
 
-### 8. Integration testing
+### 9. Integration testing
 This is your responsibility, not the per-WP agents'. Per the profile's integration /
 smoke / e2e docs:
 - Re-run the full green gate on the integrated tree.
 - Run the smoke checks and, where the change touches the relevant pipeline/area, the
   integration / E2E harness the profile points to.
 - Confirm the REQ's acceptance criteria actually pass end-to-end, including the
-  **domain invariants** the profile lists. If anything fails, loop back to step 5/6
+  **domain invariants** the profile lists. If anything fails, loop back to step 6/7
   for the responsible WP.
 
 #### Live verification, before closing — not after
 **If the profile defines a targeted live-test command** (one test or one area against
 the real external service, rather than the full suite), run it for every REQ that
-touches that integration, and do it *before* step 9 sets `status: done`.
+touches that integration, and do it *before* step 10 sets `status: done`.
 
 A hermetic gate exercises every external integration against a fake, so it proves the
 code is self-consistent with somebody's belief about the wire format. It cannot fail
@@ -234,7 +294,7 @@ structurally incapable of seeing and no dashboard had flagged.
   exhausted), say so explicitly in the report and leave the REQ open. Do not close it
   and rely on someone noticing later.
 
-### 9. Push, PR, CI, merge (per profile policy)
+### 10. Push, PR, CI, merge (per profile policy)
 Only if the profile's operating mode allows it; otherwise stop and hand off. When it
 does:
 - Push the branch; open the PR with `gh`, body ending in the profile's PR footer.
@@ -243,13 +303,13 @@ does:
   re-dispatch, then re-push — do not merge red.
 - Merge once green. Then set each delivered REQ's `status: done` and update the
   `<backlog>/BACKLOG.md` index row.
-- **Do not use a half-closed status to skip step 8's live verification.** If a REQ
+- **Do not use a half-closed status to skip step 9's live verification.** If a REQ
   touches a live integration and the run hasn't happened, either run it now or leave
   the REQ open with the reason stated. A status like `merged (live test pending)` is a
   queue, not a resting place — and it typically sits outside whatever check enforces
   the closing rules, since those match on `done`.
 
-### 10. Report
+### 11. Report
 Summarize: which REQs shipped (with PR links), which were deferred and why, any new
 follow-up REQs the work surfaced (you may file these via the same backlog format),
 and the final backlog state.
