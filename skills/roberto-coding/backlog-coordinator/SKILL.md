@@ -135,13 +135,22 @@ Group the prioritized work into WPs sized for one coding agent each:
   A solo WP pays the full worktree + dispatch + verify + trial-merge + PR + CI cost
   regardless of diff size; riding inside a WP that's paying that cost anyway is close
   to free. Only dispatch one solo if it's blocking or none is in sight for a while.
-- **Fast path for small, low-risk REQs** (`p2`/`p3`, single-file, doesn't touch a
-  composition root or the schema): the coordinator may implement it directly in the
-  WP's worktree instead of writing a dispatch prompt and invoking an agent — skip
-  straight from worktree setup to the change itself. Still run the full definition-of-done
-  checklist yourself (`references/dispatch-playbook.md` §2), still do the trial merge,
-  and still go through PR → CI → merge exactly as for a dispatched WP — none of that is
-  the expensive part; the round-trip through a separate agent process and its own
+- **Fast path for small, low-risk REQs** — gate this on the fix's blast radius, not
+  the REQ's priority label: single-file (or a file plus its test), doesn't touch a
+  composition root, the schema, or a create/write-back/delivery code path. Priority
+  measures urgency/impact of the *bug*, not risk of the *fix* — a `p1` classification
+  or diagnosability fix (e.g. adding a missing entry to a reason-code taxonomy) can be
+  just as low-risk as a `p3` cosmetic one, and should fast-path on the same terms.
+  Conversely, anything touching create/write-back/delivery stays on the full dispatch
+  path regardless of priority, even a `p2` — that's the data-loss-critical class where
+  a wrong fix risks a duplicate or lost write to someone's real address book, not
+  something to shortcut on urgency grounds alone. When it qualifies, the coordinator
+  may implement it directly in the WP's worktree instead of writing a dispatch prompt
+  and invoking an agent — skip straight from worktree setup to the change itself.
+  Still run the full definition-of-done checklist yourself
+  (`references/dispatch-playbook.md` §2), still do the trial merge, and still go
+  through PR → CI → merge exactly as for a dispatched WP — none of that is the
+  expensive part; the round-trip through a separate agent process and its own
   self-verification pass is. Use judgement: if you're not confident you understand the
   fix as well as an agent that read the surrounding code would, dispatch instead.
 
