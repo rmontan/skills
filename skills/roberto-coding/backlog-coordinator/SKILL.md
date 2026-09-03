@@ -67,9 +67,18 @@ complexity scoring from step 5. Then stop.
 ## Workflow
 
 ### 1. Load the backlog
-Read `<backlog>/BACKLOG.md` and every `REQ-*.md` with `status: ready`. Ignore
-`clarifying` (intake isn't done), `done`, and `wontfix`. If an otherwise-good item
-has unresolved **Open questions** that block design, either resolve them from the
+On a mature backlog, `<backlog>/BACKLOG.md` is almost entirely closed-out history
+(`done`/`wontfix`) that this step never uses — don't pull the whole file into
+context to get a handful of live rows. Grep it for the non-terminal statuses
+instead of reading it whole:
+
+```
+grep -E '\| (ready|in-progress|clarifying)' <backlog>/BACKLOG.md
+```
+
+Then read every `REQ-*.md` matching `status: ready` in full. Ignore `clarifying`
+(intake isn't done), `done`, and `wontfix`. If an otherwise-good item has
+unresolved **Open questions** that block design, either resolve them from the
 codebase/docs yourself or, if they truly need the user, surface them and skip that
 item for this run rather than guessing.
 
