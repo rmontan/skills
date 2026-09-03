@@ -273,11 +273,25 @@ gh pr checks --watch                               # wait for the profile's CI w
 ```
 - Commit messages end with the profile's commit footer.
 - If CI is red: diagnose, fix or re-dispatch, re-push. **Never merge red.**
-- Merge when green:
+- **Remove the worktree before merging, not after.** `git branch -d`/`-D` and
+  `gh pr merge --delete-branch` both refuse to delete a branch that's still checked
+  out in a worktree — silently, from the coordinator's perspective, since the PR
+  still shows as merged. Observed at scale (2026-09-03): a repo audited after months
+  of coordinator waves had accumulated **~250 dead branches**, nearly all already
+  merged, because this step ran in the wrong order every time. Do it in this order:
 ```bash
+git worktree remove .worktrees/<wp>
 gh pr merge --merge --delete-branch
 ```
-- Clean up: `git worktree remove .worktrees/<wp>`.
+- **Verify the delete actually happened** — don't trust the command's exit code
+  alone; `--delete-branch` can report success on the merge while silently failing
+  the branch deletion half:
+```bash
+git branch -a | grep wp-<wp>            # expect no output
+git ls-remote --heads origin wp-<wp>    # expect no output
+```
+  If either still shows the branch, finish the cleanup by hand:
+  `git branch -D wp-<wp>` and/or `git push origin --delete wp-<wp>`.
 
 ## 8. Updating the backlog
 After merge, for each delivered REQ:
