@@ -1,6 +1,76 @@
 {
   "version": 1,
   "entries": {
+    "freemius-checkout": {
+      "source": "github.com/freemius/freemius-ai/skills/freemius-checkout",
+      "type": "github-subdir",
+      "installed_at": "2026-09-03T08:13:09.391763941Z",
+      "repo_url": "https://github.com/freemius/freemius-ai.git",
+      "subdir": "skills/freemius-checkout",
+      "version": "6dd4e92",
+      "tree_hash": "a953fed0c302c378ab7c4300c91babe263314f97",
+      "file_hashes": {
+        "SKILL.md": "sha256:5d6c945ca5e896a5a4abea131ca8f28c4a17f6a9833e29e7cd871e15587278cc",
+        "references/checkout-provider.md": "sha256:58da827a6746b7f0683143f19630b36761148cd841c36937597499426c2fc6a4",
+        "references/custom-buttons.md": "sha256:932f7b0bf3c1624fa13e03eee2bc1b7cd7dc897dd0fffd663a372f264524e9be",
+        "references/paywall.md": "sha256:942eef02b062239cb501afc89bf44b22afea2529cdd6e0acf40480abe0244a78",
+        "references/pricing-tables.md": "sha256:b18a66d786d1986e029e1222ebfc325040f29455ff71edf4d4545ef6597ddfc2",
+        "references/vite-hono-porting.md": "sha256:3eafd5c85e4f78d2a25551650d42b2056245797a23d9c70d12a37ecdfa797825"
+      }
+    },
+    "freemius-core": {
+      "source": "github.com/freemius/freemius-ai/skills/freemius-core",
+      "type": "github-subdir",
+      "installed_at": "2026-09-03T08:13:09.461658377Z",
+      "repo_url": "https://github.com/freemius/freemius-ai.git",
+      "subdir": "skills/freemius-core",
+      "version": "6dd4e92",
+      "tree_hash": "d79030990b0e6997235a4e48985dd2e208c86bbb",
+      "file_hashes": {
+        "SKILL.md": "sha256:a8a581f6c9308e376338bf56a66d6a1378d25d3e1ddb307c7c104e52ddfcc262",
+        "assets/AGENTS.sample.md": "sha256:c25567bdfd100ab77a71f401b6eb95375a40312587dfcf474f085ff80e2e29a3",
+        "references/checkout.md": "sha256:72d00a2aa96a9b005d30a6530137fb88d990ec75ba64a5b10e4925e371f5db72",
+        "references/dashboard-and-secrets.md": "sha256:fa3aba6f58437b2c7658a56c5b41911da02fe9bc3c252e0117095edf5f11a4ad",
+        "references/entitlement-logic.md": "sha256:ba44486726ac569ba2b09a0cc8eb491a732090389eb9ab160f2cabddbf97a65d",
+        "references/entitlement-table.md": "sha256:31f3252ab8586aa38c913e0a30c80e155b9d941bb69ba1293fb908625935529c",
+        "references/purchase-processing.md": "sha256:2a1df2780dbf677e11636886c003a3c2aff3fc748cf3cec48c3c5216e739a8d3",
+        "references/vite-hono-notes.md": "sha256:8c48e356f2eb147cb2d339babef9d531c185bfc13a441416fced1bfcd0b16b95",
+        "references/webhooks.md": "sha256:02f2a7870e301a51f5a3ef37df48a1f56c3cb96790133e3f512ab40e53159016"
+      }
+    },
+    "freemius-customer-portal": {
+      "source": "github.com/freemius/freemius-ai/skills/freemius-customer-portal",
+      "type": "github-subdir",
+      "installed_at": "2026-09-03T08:13:09.495749741Z",
+      "repo_url": "https://github.com/freemius/freemius-ai.git",
+      "subdir": "skills/freemius-customer-portal",
+      "version": "6dd4e92",
+      "tree_hash": "cc79fd823a15eae8219a09bab22539cf9ad79439",
+      "file_hashes": {
+        "SKILL.md": "sha256:3b5d03761c82b664248d6b23ef6dc0e844b5f240411cb404210a024124cd1634",
+        "references/billing.md": "sha256:8f978be092b9de3941af2067ebe9bfe7c1721c9ebf6a3b645047e20d41b7dcbd",
+        "references/cancellation-and-coupon.md": "sha256:a1e85a0abeaf37183a5ccffe1b8cf487480af0cf80e6ea64dbc9e8880b343202",
+        "references/headless-endpoint.md": "sha256:7d20e76e5b6445fe7b39244333fc4a8b2d32950d42c1878936b8eac96c23e6f5",
+        "references/payments-and-invoices.md": "sha256:a19edf5ee6dbc9ad68af434df8729bbac847da4d7dcce563e724a51395722a30",
+        "references/subscription-and-upgrade.md": "sha256:613da2a2b39fe5486332489406b881d2ec52d4a101538feae6ea3acfb42ddde1"
+      }
+    },
+    "freemius-troubleshooting": {
+      "source": "github.com/freemius/freemius-ai/skills/freemius-troubleshooting",
+      "type": "github-subdir",
+      "installed_at": "2026-09-03T08:13:09.543142137Z",
+      "repo_url": "https://github.com/freemius/freemius-ai.git",
+      "subdir": "skills/freemius-troubleshooting",
+      "version": "6dd4e92",
+      "tree_hash": "4eb21b2a7f1bc9ac73a13f2e06ede7c658b982df",
+      "file_hashes": {
+        "SKILL.md": "sha256:814dace28faa8bececef306dd81651cdcce9dd0b526e78aeb02cea1c8f5709a7",
+        "references/checkout-and-portal.md": "sha256:24f6b7657cdbeecfd1426f94ef904c1f3686db65ee87b580344873e5dc873555",
+        "references/sdk-types-and-events.md": "sha256:d739f0181717ea57d85415bce1f31cd166f13866505c486d7f4f92415c7c161c",
+        "references/stack-and-porting.md": "sha256:ab8f0562a357acad3c3d61c6e9c43ff0ba73dab68cba63bd56c7e4affd28ecdc",
+        "references/webhooks-and-redirect.md": "sha256:c5603a5a61a143fa91513be3f79cfb1613f03a62acba0acc6b35f14b49b26049"
+      }
+    },
     "skillshare": {
       "source": "github.com/runkids/skillshare/skills/skillshare",
       "type": "github-subdir",
