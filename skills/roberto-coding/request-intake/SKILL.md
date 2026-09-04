@@ -156,6 +156,72 @@ proposal with its open choice and set the entry accordingly.
 
 ### 5. Write the backlog file
 
+**Stage on a named ref before you commit — never a detached HEAD.** A repo that
+dedicates a worktree to `main` (e.g. a standing coordinator worktree) will refuse
+`git checkout main` from any other checkout (`fatal: 'main' is already used by
+worktree at ...`). The silent-looking workaround — `git checkout origin/main` — does
+not fail, but it lands on a **detached HEAD**: a commit made there is real, but no
+branch points at it, so it survives only as long as the reflog does. Because this
+step ends by pushing (below), that window is normally seconds, not sessions — but if
+`main` is held elsewhere you still need *something* named to commit onto and push
+from:
+1. `git fetch origin` and check whether `main` is free (`git worktree list` — if no
+   row shows `main` checked out elsewhere, it's yours to use normally).
+2. If `main` is free: work on it, fast-forwarding to `origin/main` first if it's
+   behind. If it's *ahead* of `origin/main` with commits that aren't yours, leave
+   them alone (they're someone else's work mid-flight) and just add yours on top.
+3. If `main` is held by another worktree: do **not** fall back to checking out
+   `origin/main` directly. Create a real, named branch from it instead —
+   `git checkout -b backlog-req-pending origin/main` (or reuse one you already made
+   this session) — you'll push straight from it below and can discard it once pushed.
+
+**Deliver with a direct push to `main` — no branch left open, no PR, no CI gate**,
+unless the project's own `docs/backlog/PROJECT.md` says otherwise. This mirrors
+`qa-intake`'s delivery policy for its own catalog, for the same reason: a `REQ-*.md`
+file plus its `BACKLOG.md` row is inert documentation nothing in `make gate` executes
+as code, so gating it behind a branch/PR/CI cycle is ceremony that doesn't protect
+anything — it only protects the *fix* a coordinator later builds from it, which still
+goes through the full cycle at dispatch/integration time regardless. Leaving it
+committed-but-unpushed instead is the actively worse option: it has caused real
+incidents in practice — a REQ invisible to a coordinator reading only `origin/main`,
+and (separately) local-only backlog commits getting swept into an unrelated PR's
+history under GitHub's squash-merge, because they were sitting unpushed on the same
+`main` a different push went out from. Pushing immediately removes the window both
+failure modes need.
+
+- If the project defines a fast, database-free backlog-consistency check (e.g. a
+  `check-backlog` target), run it before pushing — cheap insurance against shipping a
+  malformed `REQ-*.md`/`BACKLOG.md` pair straight to `main` with nothing else gating
+  it. Skip silently if the project has none.
+  - **A failure naming a file this session didn't just write is not necessarily a
+    real defect — check whether it's committed before treating it as one.** Nothing
+    stops a second request-intake session from doing this same workflow in the same
+    shared checkout (this skill doesn't use a dedicated worktree the way WP dispatch
+    does), and a mid-flight session's own drafted-but-not-yet-committed `REQ-*.md`
+    looks, to a filesystem-level check, identical to a genuine orphan. Run
+    `git status --porcelain -- <backlog>/` on the offending path(s): if it shows
+    uncommitted (`??` or modified), it's very likely someone else's in-progress work,
+    not a bug — **never edit, delete, "fix," or commit a file this session didn't
+    create**, and don't let it block your own push (your own REQ + `BACKLOG.md` row
+    stay staged/committed together as their own atomic unit regardless of what else
+    is sitting uncommitted in the tree). Only treat the finding as real, and worth
+    surfacing or fixing, once `git log -- <path>` shows it's actually committed.
+    Confirmed happening in practice, 2026-09-04: a concurrent session's freshly
+    written `REQ-0488` file tripped `check-backlog` for another session before it had
+    committed; the file was legitimate and was committed (with its `BACKLOG.md` row)
+    moments later.
+- Push mechanics: `git fetch origin main && git rebase origin/main` (only if you
+  weren't already at its tip) `&& git push origin HEAD:main`. Plain fast-forward,
+  never `--force`. If it's rejected because `main` moved since your fetch, that's an
+  ordinary push race — fetch, rebase, and retry, same as any other push, rather than
+  forcing over someone else's commit.
+- If the push keeps failing for a reason other than an ordinary race (auth, a
+  server-side hook rejection), don't loop on it — say so plainly in your confirmation
+  (§6) and leave the commit local rather than silently giving up on delivery. The
+  entry still exists and is safe (it's a real commit on a named ref); it's just not
+  on `origin/main` yet, and a human or a coordinator run needs to know that
+  explicitly rather than assume every filed REQ made it there.
+
 **Reserve the ID under a lock — don't just scan-then-write.** Two `request-intake`
 sessions can run at the same time against the same backlog (different terminals,
 different agents) — and so can a `backlog-coordinator` session, reading and
@@ -244,6 +310,11 @@ outside this skill ever observes one without the other:
    Do this even if a step failed partway (wrap in a way that guarantees the lock
    is released) — a stuck lock blocks every session until the 120s staleness
    window passes.
+4. **After** releasing the lock (don't hold it across a network call), push per
+   "Deliver with a direct push to `main`" above (skip if 3.c skipped — no git repo,
+   nothing to push). The lock only needs to protect the local ID-reservation +
+   atomic commit; the push race against `origin` is a separate, ordinary
+   fetch/rebase/retry concern, same as any other push.
 
 **Why this matters beyond ID collisions:** the REQ file and its `BACKLOG.md` row
 are one logical unit — `check-backlog`-style gates (and a coordinator reading the
@@ -274,9 +345,12 @@ Tell the user the ID, the classification, the status, and the file path (as a
 clickable link). If status is `clarifying`, state plainly what's still needed. If you
 wrote a **Proposed approach**, say so in one line and note it's the coordinator's to
 confirm (or, if you validated a choice with the user, that it's recorded). In a git
-repo, mention that it's committed (not just written) — that's what makes it safe for
-a coordinator to act on immediately. Don't promise a timeline or priority — that's
-the coordinator's call.
+repo, confirm it's **pushed to `origin/main`** (not just committed) — that's what
+makes it safe for a coordinator reading `origin/main` to see and act on immediately,
+without needing to know which checkout or branch it was filed from. If the push
+didn't go through (§5's "if the push keeps failing" case), say so explicitly instead
+— name the branch the commit is actually sitting on, and that someone still needs to
+push it by hand. Don't promise a timeline or priority — that's the coordinator's call.
 
 ## Boundaries
 - **Never** prioritize, estimate effort, assign a work package, or start coding here.
