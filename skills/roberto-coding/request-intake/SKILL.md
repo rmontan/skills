@@ -90,6 +90,40 @@ to do. If there's both a fresh report in the conversation and a non-empty queue,
 default to the fresh report (it's what the user is actively talking about) and
 mention the queue has pending items, rather than silently ignoring either.
 
+### 0b. Structured-brief mode (skip clarification when the input is already actionable)
+Some reports arrive already meeting the actionable bar in §3 — a finding from a code
+review with `file:line` locations, a stated root cause, impact and fix direction; a
+queue item that carries reproduction steps; a brief handed down by a coordinator that
+is filing on the owner's behalf. Treat those as **structured briefs** and run a
+shortened path:
+
+- **Skip §3.** Do not re-ask for what the brief already states. The one legitimate
+  question is a genuine owner-only choice (a product behaviour, a locked-decision
+  conflict, a scope call); when the reporter is reachable, ask it; when they are not
+  (see below), record it under **Open questions** with a recommended default and file
+  with `status: ready`. Use `status: clarifying` only when the entry is unactionable
+  without that answer.
+- **Keep §4 to confirmation, not re-investigation.** Read the cited lines to check they
+  still say what the brief claims and to write an accurate proposed approach; do not
+  re-derive the finding or widen into a second review.
+- **Pin the reading scope.** The project profile (`docs/backlog/PROJECT.md`), the
+  template, and one recent `REQ-*.md` for format are enough. Do not browse the backlog
+  or the archive looking for context the brief already supplies.
+- **Cite the source.** Put where the brief came from in **Notes** (e.g. "found by the
+  2026-09-04 read-only review, finding F-042"); never a path to an untracked or
+  temporary file — a dead reference is the project's own named failure mode.
+
+**When the reporter cannot answer.** A coordinator dispatching many intakes in parallel
+(one subagent per finding) cannot relay `AskUserQuestion` prompts, and a subagent has
+no human on the other end. If the invoking brief says the reporter is unreachable, or
+you are running as a subagent, do not call `AskUserQuestion` at all — every choice the
+skill would normally put to the user becomes an Open question with a recommended
+default, and your final report names the ones that need the owner.
+
+This mode is what made a 76-entry batch (2026-09-05) run at roughly 70–150 seconds per
+entry: the slow parts of intake are the human round-trips and the re-investigation,
+not the file write.
+
 ### 1. Classify
 Decide whether this is a **bug** (something behaves wrong vs. its intended behavior)
 or a **feature** (new or changed behavior). If genuinely ambiguous, ask. The two
@@ -176,7 +210,11 @@ from:
    this session) — you'll push straight from it below and can discard it once pushed.
 
 **Deliver with a direct push to `main` — no branch left open, no PR, no CI gate**,
-unless the project's own `docs/backlog/PROJECT.md` says otherwise. This mirrors
+unless the project's own `docs/backlog/PROJECT.md` says otherwise, **or the invoking
+coordinator explicitly instructs commit-only for a batch** (its own brief forbids
+subagents pushing, and it pushes the whole batch once at the end). In the commit-only
+case, still commit under the lock exactly as below, skip the push, and say in your
+confirmation (§6) that the commit is local on `main` and who is expected to push it. This mirrors
 `qa-intake`'s delivery policy for its own catalog, for the same reason: a `REQ-*.md`
 file plus its `BACKLOG.md` row is inert documentation nothing in `make gate` executes
 as code, so gating it behind a branch/PR/CI cycle is ceremony that doesn't protect
@@ -265,10 +303,19 @@ Still use the `mkdir` lock for the **rest** of the critical section below — ma
 the REQ file and its `BACKLOG.md` row appear together, atomically, so nothing
 outside this skill ever observes one without the other:
 
-1. Draft the full entry content first (frontmatter + body) so the only thing left to
-   do under the lock is pick the number, write the file, update the index, and
-   commit — keep the critical section short, but do not split it across a
-   conversation turn.
+1. Draft the full entry content first (frontmatter + body, with `id: REQ-XXXX` as a
+   placeholder and the filename slug already chosen) to a temp file, so the only
+   thing left to do under the lock is pick the number, write the file, update the
+   index, and commit.
+   **Run the whole critical section — steps 2 through 3.d below — as ONE shell
+   invocation**, with a `trap` that releases the lock on EXIT. Not "a few quick tool
+   calls": one script. Each tool call an agent makes while holding the lock is a
+   model round-trip that can run tens of seconds, and past 120 s the lock reads as
+   abandoned to every other session (step 2), which is exactly how two sessions end
+   up editing `BACKLOG.md` at once. A single script holds the lock for seconds. Retry
+   `git commit` inside the script (a few attempts, ~2 s apart) if it fails on
+   `index.lock` — another session's commit in progress — rather than returning to
+   the model to decide.
 2. Acquire the lock: retry-loop `mkdir <backlog>/.req-lock` (mkdir is atomic — it
    fails if the directory already exists, so exactly one concurrent session wins).
    - On failure, check the lock's age (`stat -c %Y <backlog>/.req-lock`, or `%m` on
@@ -330,6 +377,15 @@ queue** (§0), this means commit after *each* item, not batched at the end of th
 run — a crash mid-queue must never leave more than one item's worth of uncommitted
 backlog state.
 
+**Corrections go back under the lock.** If you notice a defect in your own entry or
+index row after releasing the lock (a quoting artifact, a wrong slug, a typo in the
+title), fix it by re-acquiring the lock and committing the fix as its own commit —
+never by editing `docs/backlog/` in place while another session may be mid-commit.
+Confirmed in a parallel batch (2026-09-05): one session fixed its own `BACKLOG.md` row
+outside the lock, and a neighbouring session's `git add docs/backlog/BACKLOG.md`
+swept that edit into *its* commit. The content ended up correct, but attributed to
+the wrong commit, and only because the edit happened to be benign.
+
 - Fill every section you can in the template from `assets/request-template.md`; leave
   coordinator-owned fields (`priority`, `wp`) unset. If you did §4, fill the optional
   **Proposed approach** section; otherwise delete it.
@@ -342,7 +398,9 @@ backlog state.
 
 ### 6. Confirm
 Tell the user the ID, the classification, the status, and the file path (as a
-clickable link). If status is `clarifying`, state plainly what's still needed. If you
+clickable link). When filing from a structured brief for a coordinator (§0b), keep it
+to one line — ID, path, status, type, commit hash, and the single open question that
+needs the owner, if any — and do not paste the entry body back. If status is `clarifying`, state plainly what's still needed. If you
 wrote a **Proposed approach**, say so in one line and note it's the coordinator's to
 confirm (or, if you validated a choice with the user, that it's recorded). In a git
 repo, confirm it's **pushed to `origin/main`** (not just committed) — that's what
