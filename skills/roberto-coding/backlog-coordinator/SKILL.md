@@ -66,6 +66,45 @@ complexity scoring from step 5. Then stop.
 
 ## Workflow
 
+### 0. Reconcile git state before reading anything
+This is not optional and not covered by a clean `git status` — a clean working tree
+says nothing about whether local `main` matches `origin/main`, whether another
+worktree or process already has work in flight, or whether a `request-intake`
+session left a filed REQ on a branch you're not looking at. Run this before reading a
+single REQ:
+
+```
+git branch --show-current                   # are you even where you think you are?
+git fetch origin
+git log --oneline origin/main..main         # local-only commits — don't lose these
+git log --oneline main..origin/main | wc -l # how far behind, if at all
+git worktree list                           # other WPs, or a stray intake branch, already checked out?
+```
+
+Plus whatever this project uses to detect a live concurrent dispatch process (e.g.
+`pgrep -af opencode` if the profile's dispatch mode is an external CLI).
+
+- **If local `main` is behind `origin/main`:** fast-forward before doing anything
+  else (`git merge --ff-only origin/main`, or rebase if you have local-only commits
+  worth keeping — see the fast-forward-or-rebase recipe below).
+- **If local `main` has commits `origin/main` lacks:** don't assume they're stale or
+  yours. `request-intake` pushes each REQ to `origin/main` directly as its normal
+  delivery path (mirroring `qa-intake`'s catalog policy), so this should be rare —
+  but it falls back to a local-only commit when that push fails (auth, a rejected
+  push it couldn't resolve), and it says so explicitly when it does. Read any such
+  commits in; they may be a REQ that belongs in this run's backlog scan and never
+  made it to `origin/main`. Never discard them to get to a "clean" state.
+- **If `git worktree list` shows a branch that isn't a known WP** (e.g. a
+  `request-intake` session's leftover staging branch from a failed push, or a
+  detached-HEAD checkout with a branch someone anchored it to after the fact — see
+  `request-intake`'s own §5): treat it the same as a local-only commit on `main` —
+  read it in, don't ignore it because it's not where you expected to look.
+- **If a live dispatch process is already running:** its worktree's REQ is already
+  spoken for — don't re-read or re-dispatch it.
+
+Only once local state is reconciled against `origin/main` (and you know what, if
+anything, is running concurrently) should you move to step 1.
+
 ### 1. Load the backlog
 On a mature backlog, `<backlog>/BACKLOG.md` is almost entirely closed-out history
 (`done`/`wontfix`) that this step never uses — don't pull the whole file into
@@ -306,6 +345,23 @@ structurally incapable of seeing and no dashboard had flagged.
 ### 10. Push, PR, CI, merge (per profile policy)
 Only if the profile's operating mode allows it; otherwise stop and hand off. When it
 does:
+- **Re-run step 0's `git fetch origin` + divergence check immediately before
+  pushing**, not just at the start of the run — a wave can take a while, and another
+  session (interactive `request-intake`, a peer coordinator) may have pushed or
+  committed to local `main` while you were dispatching. If `origin/main` moved,
+  rebase your branch onto it now, not after a rejected push forces the issue.
+- **A WP branch built on top of local `main` inherits everything local `main` has
+  that `origin/main` doesn't** — this should be rare now that `request-intake`
+  pushes each REQ directly, but a failed push falls back to a local-only commit
+  (and says so), and other local edits (docs closure notes, etc.) are still
+  routine. GitHub squash-merges everything not already on the PR's base, so any of
+  that rides along under your commit message with no warning. Before opening the
+  PR, diff your branch against `origin/main`
+  (`git diff --stat origin/main...<branch>`) and confirm it contains only what you
+  intend to ship. If it doesn't, rebase onto `origin/main` first
+  (`git rebase origin/main` — duplicate content is skipped automatically) so the
+  other commits land on `origin/main` as themselves, separately, rather than
+  disappearing into your PR's history.
 - Push the branch; open the PR with `gh`, body ending in the profile's PR footer.
 - Commits end with the profile's commit footer.
 - Wait for CI to go green (the profile's CI workflow). If CI fails, fix or
