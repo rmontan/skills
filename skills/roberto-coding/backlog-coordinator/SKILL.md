@@ -375,9 +375,10 @@ does:
   the closing rules, since those match on `done`.
 
 ### 11. Report
-Summarize: which REQs shipped (with PR links), which were deferred and why, any new
-follow-up REQs the work surfaced (you may file these via the same backlog format),
-and the final backlog state.
+Summarize: which REQs shipped (with PR links), which were deferred and why, the
+follow-up REQs filed per step 8's mandatory scan of each agent's own final report
+(with their new REQ ids — this should already be done by the time you write this
+summary, not triggered by the user asking for it), and the final backlog state.
 
 ## Boundaries
 - **Don't relitigate locked decisions** (profile). Build within them.

@@ -297,8 +297,20 @@ git ls-remote --heads origin wp-<wp>    # expect no output
 After merge, for each delivered REQ:
 - Set `status: done` in `<backlog>/REQ-<NNNN>-*.md`.
 - Update its row in `<backlog>/BACKLOG.md` (status + PR link in Notes if useful).
-- If the work surfaced new issues, file them as new `REQ-*.md` entries (same format
-  as the request-intake template) so nothing is lost.
+- **Re-read the agent's own final report for anything it flagged but didn't fix** —
+  don't rely on remembering it from when the completion notification first arrived,
+  and don't wait to be asked. Look specifically for language like "worth an owner
+  decision," "pre-existing behaviour I did not change," "noticed but out of scope,"
+  "did not touch — follow-up," or a named acceptance criterion the agent
+  deliberately left undone with a reason. An agent that just spent an hour reading a
+  file end to end is often the best-informed reporter of an adjacent defect the
+  original REQ never asked about, and unlike a fresh `request-intake` session it has
+  already done the investigation — that context is cheapest to capture right now,
+  before the worktree is removed and the report scrolls out of reach.
+  File each one as its own `REQ-*.md` (same format as `request-intake`), or state
+  plainly in your own report why a given item doesn't need one (already tracked
+  elsewhere, not actually new, etc.). Treat this the same as running `make gate` —
+  part of closing the WP, not an optional courtesy.
 
 ### A concurrent request-intake session can be writing to the same backlog
 `request-intake` sessions run independently of the coordinator — a different
