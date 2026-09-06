@@ -90,6 +90,15 @@ Use the profile's `<dispatch>` mode (or the tier-selected one):
   correct WP branch, then re-run the full verification in §3 yourself before
   trusting it — don't take the agent's own gate/test claims for a worktree it
   couldn't actually reach as-instructed.
+  **A dispatched subagent must run `<gate>` (and any other verification command)
+  in the foreground, not backgrounded.** The general Bash-tool guidance every
+  Claude agent sees suggests backgrounding a long-running command and ending
+  the turn to await a completion notification — that convention only resumes
+  the *top-level* session; a dispatched `Agent`-tool subagent's turn simply
+  ends, so it reports the WP done before the command actually finished, having
+  "backgrounded and waited for a notification that will never come." The
+  Definition-of-done checklist below (item 1) spells this out for the agent
+  directly — don't drop it when composing the WP prompt.
 - **By hand** — implement the WP yourself in the worktree, committing locally.
 
 The prompt must be self-contained and include: worktree/branch, scope + ownership
@@ -159,9 +168,15 @@ load-bearing and keep the full checklist — this calibration is permission to g
 lighter on low-stakes changes, not a default toward skipping it.
 
 > Before you report this work package done:
-> 1. Run `<install>` and `<gate>` yourself. If it fails, fix it and re-run — keep
->    iterating until it's actually green. Don't hand back a red or unverified result
->    on the theory that the coordinator will catch it; that costs a full round-trip.
+> 1. Run `<install>` and `<gate>` yourself, **in the foreground — do not background
+>    the command and end your turn expecting a notification when it finishes.** That
+>    convention resumes the coordinator's own session; it does not resume you. If you
+>    background `<gate>` and stop here, you will report this WP done before
+>    verification actually ran, silently. Block on the real exit code. If it fails,
+>    fix it and re-run — keep iterating until it's actually green. Don't hand back a
+>    red or unverified result on the theory that the coordinator will catch it; that
+>    costs a full round-trip. This applies to every command in this checklist that
+>    runs the build, tests, or a live check (items 2 and 6 too), not just this one.
 > 2. If the profile records a test-count/coverage baseline, run its check command and
 >    paste the output. Never hand-count or estimate your own test total — every WP
 >    that has, under-reported.
