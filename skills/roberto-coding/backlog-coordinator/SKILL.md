@@ -184,13 +184,19 @@ Group the prioritized work into WPs sized for one coding agent each:
   domain invariants** — full weight for a WP touching a data-loss/security/privacy-
   critical path, lighter for a purely cosmetic or copy-only change (full reasoning,
   and the cost of over-applying it: that same playbook subsection).
-- **No prose-enforced invariants.** State in every WP prompt: *an agent may not ship a
-  comment asserting that two code sites must stay consistent* — "must never disagree",
-  "must match", "keep in sync with", "mirrors X exactly", "duplicated here". When an
-  agent notices that two places implement the same rule, it has exactly three legal
-  moves: share the one definition, write a test that fails when they diverge, or
-  **report it up as a seam finding** and leave both sites alone for the coordinator to
-  schedule (step 11). Writing the comment is not a fourth option.
+- **Define once, consume everywhere — and no prose-enforced invariants.** State in every
+  WP prompt: a rule, constant, predicate, label or enum that two places need is defined
+  once and imported, never restated. **Agreement between copies is not the bar** — N
+  copies that happen to agree are the same defect as N that disagree, with the symptom
+  merely latent, so "no divergence today" never downgrades a finding. When an agent
+  notices two places implementing the same rule, its legal moves in order are: **share
+  the definition** (extract, import, delete the copies); **generate the copies from one
+  source** when a language boundary genuinely prevents an import (Go ↔ TypeScript);
+  or **report it up as a seam finding** and leave both sites alone for the coordinator
+  to schedule (step 11). A test pinning two implementations equal is a temporary brace
+  that must ship with a follow-up to remove it, not a resolution. And shipping a comment
+  asserting the coupling — "must never disagree", "must match", "keep in sync with",
+  "mirrors X exactly", "duplicated here" — is not an option at all.
 
   This is not a style rule. A comment is the one form of coupling that no gate can
   check, so it decays silently while the code drifts, and the drift surfaces as a bug
