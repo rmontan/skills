@@ -184,6 +184,29 @@ Group the prioritized work into WPs sized for one coding agent each:
   domain invariants** — full weight for a WP touching a data-loss/security/privacy-
   critical path, lighter for a purely cosmetic or copy-only change (full reasoning,
   and the cost of over-applying it: that same playbook subsection).
+- **No prose-enforced invariants.** State in every WP prompt: *an agent may not ship a
+  comment asserting that two code sites must stay consistent* — "must never disagree",
+  "must match", "keep in sync with", "mirrors X exactly", "duplicated here". When an
+  agent notices that two places implement the same rule, it has exactly three legal
+  moves: share the one definition, write a test that fails when they diverge, or
+  **report it up as a seam finding** and leave both sites alone for the coordinator to
+  schedule (step 11). Writing the comment is not a fourth option.
+
+  This is not a style rule. A comment is the one form of coupling that no gate can
+  check, so it decays silently while the code drifts, and the drift surfaces as a bug
+  in a *different* screen weeks later. It is also the predictable behaviour of a
+  correctly-scoped agent: noticing the duplication is in scope, fixing it usually
+  isn't, and the comment is the only move left — which is precisely why the prompt has
+  to name the seam-finding escape hatch, or agents will keep choosing prose.
+
+  Observed cost when this rule was absent (contact_sync2, 2026-09): one duplicated
+  predicate accumulated **29 "must never disagree" comments across 8 files and seven
+  near-identical bug REQs in three days**, each fix desynchronising the next — one REQ's
+  title records that it was *caused by* the previous REQ's fix. A compensating
+  calculation in one language silently drifted from the query it compensated for, and
+  nothing detected it, because the binding between them was a sentence. If the profile
+  defines a lint for this, a WP may not add an allow-line to make its own work pass —
+  same rule as any other baseline: it reports, you decide.
 - A WP usually maps to one REQ, but may bundle tightly-related REQs or split a large
   REQ. **REQs that share a file per the step 1 overlap scan are strong bundling
   candidates** — a coding agent that has already read and understood a file can apply
@@ -248,11 +271,45 @@ say why in one line.
 Record the score in the WP prompt and in each covered REQ's Notes (`Coordinator
 note: WP complexity N/5 — <one-line reason>`) so a later run doesn't re-derive it.
 
+**Then score coupling — separately, and on mechanical signals.** Complexity measures
+how hard the change is to *build*; coupling measures how far a wrong choice
+*propagates*. They are orthogonal, and conflating them is a known, expensive failure:
+a WP scored 2 (a counting fix — small, obvious, one file) widened a SQL predicate that
+four other call sites depended on, and produced a fresh bug REQ whose title names that
+fix as its cause. The model wasn't over-matched by the difficulty; nothing had told it
+the blast radius was large.
+
+Mark a WP **high-coupling** if *any* of these hold — check them, don't intuit them:
+
+- it modifies an enum, a shared predicate/classifier, or the API contract
+- it changes a definition consumed at **3 or more** call sites
+- its REQ carries a `root_cause` link, or ≥2 prior REQs share its root cause
+- it touches a file the profile (or the backlog's own `areas:` tally) flags as a
+  repeat offender
+- it edits a compensating calculation — anything that corrects, mirrors, or offsets a
+  value computed elsewhere
+
+**A high-coupling WP escalates to the profile's top tier and to ask-first, whatever
+its complexity score.** If the profile reserves its most capable model for complexity
+5 and makes that tier non-autonomous, high coupling is a *second, independent* trigger
+for the same treatment: surface the WP (REQ, scope, which coupling signal fired) and
+wait, rather than spending a cheap dispatch on a decision whose cost lands three
+screens away. A complexity-2 fix that changes a shared predicate is exactly the case
+worth the expensive model — the reasoning required is architectural, not mechanical,
+and it is the *cheap* dispatch that has repeatedly proven costly here.
+
+Record it alongside the complexity score (`WP complexity N/5, coupling high/low —
+<which signal>`). If neither applies, say `coupling low` explicitly; a silent omission
+reads as "not checked."
+
 **If the profile defines dispatch tiers** (a mapping from complexity band to
 mode/command/model — `references/dispatch-playbook.md` §2), the score is what
 selects the tier in step 6: typically a cheap/fast model for 1-2, a mid-tier model
 for 3-4, and the most capable (and most expensive) model reserved for 5 alone —
 genuinely hard work, not "whatever the highest score in this wave happened to be."
+**A high-coupling WP takes that top tier too, at any complexity score** (see the
+coupling subsection above); route it there and ask before dispatching, exactly as
+you would for a 5.
 If the profile has no tiers, the score is still worth recording — it's cheap, and
 useful the next time someone reads this REQ — but route every WP through the
 profile's single dispatch mode as before; don't invent a tier mapping the profile
@@ -379,6 +436,14 @@ Summarize: which REQs shipped (with PR links), which were deferred and why, the
 follow-up REQs filed per step 8's mandatory scan of each agent's own final report
 (with their new REQ ids — this should already be done by the time you write this
 summary, not triggered by the user asking for it), and the final backlog state.
+
+**Report seam findings explicitly, as their own list.** Any place an agent (or you)
+found the same rule implemented twice and left both sites alone per step 4's
+no-prose-invariants rule belongs here by name — file/line of each site, and what the
+shared definition would be. These are the highest-value items in the report and the
+easiest to lose: each one is individually out of scope for the WP that found it, so
+unreported it becomes either a stale comment or nothing at all. If the same seam turns
+up in a second wave, stop treating it as a finding and file it as a refactor REQ.
 
 ## Boundaries
 - **Don't relitigate locked decisions** (profile). Build within them.
