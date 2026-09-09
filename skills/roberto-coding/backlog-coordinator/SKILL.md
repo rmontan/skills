@@ -121,6 +121,25 @@ unresolved **Open questions** that block design, either resolve them from the
 codebase/docs yourself or, if they truly need the user, surface them and skip that
 item for this run rather than guessing.
 
+**A "recommended default" in an Open question is not permission to adopt it.** Intake
+writes those so an entry stays actionable when the reporter is unreachable; they record
+what intake *would* pick, not a decision. Adopting one is the guessing this paragraph
+forbids — it just looks sanctioned because someone wrote the guess down first.
+
+Ask two things of every Open question. **Does answering it require knowing what the
+product should do?** Then it is the owner's, whatever default is attached: surface and
+skip. **Or does it only require applying an already-ratified rule, or reading the code?**
+Then resolve it yourself, and say in your report how you did.
+
+Confirmed in a real project (2026-09-09): an entry left a display-precedence choice open
+with one option recommended, on the reasoning that it shipped today and cost no behaviour
+change. The coordinator "provisionally adopted" it and dispatched. The owner overruled it
+with an argument neither the entry nor the coordinator had — a completed same-account
+merge deletes one of the pair, so the shipping behaviour reports the *input* to a finished
+operation as though it still needs action. The WP was rescored 3/5 → 4/5 and rerouted to
+the top tier. Surfacing and skipping would have cost one run; adopting cost a dispatch and
+a rescope.
+
 **Scan for file overlap across the `ready` set** before you prioritize: compare each
 entry's `areas:` frontmatter (grep the codebase directly if an entry lacks one or the
 field is stale) and flag any two or more `ready` REQs that touch the same file or a

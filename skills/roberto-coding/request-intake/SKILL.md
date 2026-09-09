@@ -188,6 +188,43 @@ fix, just write it down and note it's the coordinator's to confirm; don't manufa
 question. Never let validation block capture: if the user isn't available, record the
 proposal with its open choice and set the entry accordingly.
 
+**When the reporter is present, an owner-dependent choice is SETTLED before filing —
+not recorded as an Open question with a recommended default.** That fallback belongs to
+unreachable mode (§0b) and nowhere else. The reason is an asymmetry that is easy to
+miss: **intake is the only step in this workflow with the owner present.** A coordinator
+dispatches unattended, and a work-package agent has nobody to ask. So a decision left
+open at intake is not deferred to someone equally placed to make it — it is deferred to
+an agent that cannot make it, mid-build, under pressure to finish. In practice it gets
+guessed and the guess ships.
+
+Confirmed in a real project (2026-09-09): a REQ was filed with the badge precedence for
+one contact state left as an Open question with a recommended default. The coordinator
+"provisionally adopted" that default on the grounds that it shipped today and cost no
+behaviour change; the owner then overruled it with a product argument — a completed
+same-account merge deletes one of the pair, so the shipping badge reports the *input* to
+a finished operation as though it still needs action — that neither the entry nor the
+coordinator had. That was not a close call the coordinator lost; it was a decision that
+could not be made correctly without the owner, made anyway because the entry did not
+settle it.
+
+**But do not over-scope, and be careful what you assert.** Three things stay out of the
+entry: *priority and effort* (the coordinator holds the whole backlog in view and you do
+not), *sequencing against other work*, and **any design question whose answer requires
+building** — whether a pooling approach actually works, what a refactor does to the test
+suite. Those are discovered with a keyboard, and an entry that specifies them anyway
+forces the WP either to fight the REQ or to deviate silently.
+
+The sharpest failure here is a **confident wrong assertion**, which is worse than an
+absent one because it suppresses the finding. Same project, 2026-09-08: an entry's Notes
+stated as fact that a set of user-facing strings were "the retired wizard's historical
+tiles, not evidence for changing the three live agreeing sites." They were the live
+onboarding picker, and the confident dismissal kept a real divergence out of the backlog
+until a later sweep found it. Mark what you confirmed by reading from what you inferred,
+and prefer "unverified" to a tidy claim.
+
+The cut, in one line: **what the product should do, and which architecture — settle with
+the owner. What only building can answer — leave to the WP.**
+
 ### 5. Write the backlog file
 
 **Stage on a named ref before you commit — never a detached HEAD.** A repo that
