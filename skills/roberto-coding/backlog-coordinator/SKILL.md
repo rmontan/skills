@@ -266,6 +266,10 @@ Group the prioritized work into WPs sized for one coding agent each:
   expensive part; the round-trip through a separate agent process and its own
   self-verification pass is. Use judgement: if you're not confident you understand the
   fix as well as an agent that read the surrounding code would, dispatch instead.
+  If `request-intake` already left a `Coordinator note: looks fast-path eligible` in
+  the entry's Notes, treat that as a starting hypothesis to confirm against the
+  criteria above, not a re-derivation from scratch — but the criteria here are still
+  what decides it, not the flag.
 
 ### 5. Score complexity and pick an agent tier
 Score every WP (not every REQ — a bundle gets one score for the group as delivered)

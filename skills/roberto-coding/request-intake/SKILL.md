@@ -124,6 +124,31 @@ This mode is what made a 76-entry batch (2026-09-05) run at roughly 70–150 sec
 entry: the slow parts of intake are the human round-trips and the re-investigation,
 not the file write.
 
+### 0c. Obviously-trivial reports — capture, don't interrogate
+Some reports are unambiguous on arrival: a copy typo, a mislabeled button, a wrong
+color, a one-line off-by-one — single file, no design question, no data-loss/security/
+schema/composition-root angle. These meet §3's actionable bar the moment they're
+stated; a full clarifying pass would only add delay.
+
+When a report is this shape:
+- **Skip §3's question round entirely** if what happened, what should happen, and
+  where are already stated or obvious from the report. Ask only if something is
+  genuinely ambiguous (e.g. which of two screens).
+- **Write a minimal entry.** Summary plus a one-line acceptance criterion is enough —
+  don't manufacture a multi-bullet checklist or an Open Questions section for a report
+  that has no open question. Still fill `areas:`; it's what lets the coordinator
+  recognize the fast-path shape without re-deriving it from the diff.
+- **Flag it for the coordinator**, don't decide for it: add `Coordinator note: looks
+  fast-path eligible — <one clause>` to Notes. The coordinator's own fast-path rule
+  (`backlog-coordinator` SKILL.md §4) still makes the actual call; this just saves it
+  from re-reading the report from scratch to notice what intake already saw.
+- Composes with §0b when a report is both structured and trivial — skip clarification
+  per whichever section triggers, and keep the entry minimal per this section.
+
+This is not a lower bar for actionability, it's the same bar met faster: a report that
+already states what/expected/where doesn't get more actionable by being made to
+restate it in full template form.
+
 ### 1. Classify
 Decide whether this is a **bug** (something behaves wrong vs. its intended behavior)
 or a **feature** (new or changed behavior). If genuinely ambiguous, ask. The two
