@@ -74,6 +74,17 @@ Use the profile's `<dispatch>` mode (or the tier-selected one):
   cd .worktrees/<wp>
   XDG_DATA_HOME="<isolated-data-dir-from-below>" opencode run "<work-package prompt>" -m <model> --dangerously-skip-permissions
   ```
+  **Name the WP's scratch files for the WP, with these exact paths** — the prompt you
+  dispatched and the transcript you captured:
+  ```
+  .worktrees/<wp>.prompt.md      # the work-package prompt as dispatched
+  .worktrees/<wp>.log            # the run transcript
+  ```
+  Any other name is a leak: §7's teardown deletes these two paths and nothing else, so
+  a file called `<wp>-prompt.md`, or one parked in a `.worktrees/.prompts/` bucket,
+  survives every subsequent wave. Audited 2026-09-15: `.worktrees/` held 30 orphaned
+  logs and prompts going back to REQ-0371 in three different naming styles, plus
+  313 MB of stale `.opencode-data` — all for REQs long since `done`.
 - **Claude subagents** — launch the `Agent` tool (general-purpose) with the
   work-package prompt; have it commit locally in the worktree. **Do not pass
   `isolation: "worktree"` (or `"remote"`) on this call.** That parameter creates a
@@ -132,8 +143,10 @@ XDG_DATA_HOME="$OC_DATA" opencode run "<work-package prompt>" -m <model> --dange
 ```
 `.worktrees/.opencode-data/<wp>` is a sibling of the WP worktrees, so it's covered by
 the same `.worktrees/` gitignore/exclude entry from step 1 and needs no separate
-cleanup — remove it along with `.worktrees/` (or per-WP as each worktree is torn
-down).
+*gitignore* entry. It does need separate **deletion** — being ignored is why nobody
+notices it growing. Each store runs to ~150 MB, so §7's teardown removes it explicitly
+alongside the worktree; don't leave it for a someday `rm -rf .worktrees/`, which never
+comes while any WP is live.
 
 ### Cap concurrency
 Even with isolated stores, don't fire every disjoint WP at once — each opencode/agent
@@ -296,8 +309,26 @@ gh pr checks --watch                               # wait for the profile's CI w
   merged, because this step ran in the wrong order every time. Do it in this order:
 ```bash
 git worktree remove .worktrees/<wp>
+rm -rf .worktrees/<wp>.log .worktrees/<wp>.prompt.md .worktrees/.opencode-data/<wp>
 gh pr merge --merge --delete-branch
 ```
+- **Delete the WP's scratch in the same breath as the worktree.** `git worktree remove`
+  takes the directory and nothing else; the log, the prompt and the opencode store are
+  siblings it never looks at. Skipping this leaks silently — `.worktrees/` is
+  gitignored, so a clean `git status` says nothing about it, and the leak is invisible
+  until someone runs `du`. Same failure shape as the dead-branch pile above: a teardown
+  step that looks complete because the *visible* half of it ran. Only ever name
+  `<wp>` in these paths — never a glob, and never the live worktree of another WP in
+  the same wave.
+- **Audit `.worktrees/` at the end of a wave**, once the last worktree is gone:
+```bash
+git worktree list                                    # expect only the primary checkout
+ls -A .worktrees/ 2>/dev/null                        # expect empty, or only live WPs
+du -sh .worktrees/.opencode-data/*/ 2>/dev/null      # expect only live WPs
+```
+  Anything listed whose REQ is `done` is a leak from an earlier wave — delete it. Check
+  each candidate against `git worktree list` and the REQ's `status:` first; a WP that is
+  merely quiet is not finished, and its store is still in use.
 - **Verify the delete actually happened** — don't trust the command's exit code
   alone; `--delete-branch` can report success on the merge while silently failing
   the branch deletion half:
