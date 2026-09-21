@@ -370,7 +370,13 @@ each completed WP (see the playbook for commands):
 - **Ownership check** — the agent only touched its declared scope; composition roots
   untouched.
 - **Migration check** — per the profile's schema rule.
-- **Green gate** — run the profile's install + gate command.
+- **Green gate** — run the profile's install + gate command. Skip this one check when
+  the WP is the only WP in its wave: step 9 re-runs the full gate on the integrated
+  tree, and for a lone WP that tree is the same diff, so a second run here would tell
+  you nothing new before it tells you again. Run it whenever the wave has more than one
+  WP — once WPs are combined, a failure at step 9 can no longer be pinned on a single
+  WP, and this pass is what keeps it attributable instead of forcing a bisect across
+  all of them after the fact.
 - **Trial 3-way merge** into a throwaway worktree from `origin/<main>` (branches often
   have a stale base) to catch conflicts early.
 If a WP fails verification, re-dispatch with the specific failure as feedback rather
