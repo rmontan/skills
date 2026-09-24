@@ -156,6 +156,20 @@ letting a batch finish (or fail cleanly) before starting the next, unless the pr
 specifies a different limit. Serialize anything sharing files or the single
 schema-migration slot regardless of batch size.
 
+### Parallel gates and `/tmp` (no longer a per-prompt concern)
+On mnt1, concurrent `make gate` runs used to fail at the Go **link** step (and in
+`check-prose-invariants` and other shell checks) with `disk quota exceeded` — `/tmp` is a
+small quota-mounted tmpfs that several concurrent link/build phases could collectively
+exhaust. This is now fixed at the **host** level, not the prompt level: `GOTMPDIR` and
+`TMPDIR` point at `~/.cache/gotmp` / `~/.cache/tmpdir` (on `/`, which has ~130G free) via
+`~/.bashrc` (exported before the interactive-shell guard, so non-interactive dispatch
+shells get it too), the systemd `--user` manager's environment (so every process it
+spawns inherits it, same mechanism as `ARCTL_API_BASE_URL`), `~/.config/environment.d/
+gotmp.conf`, and `go env -w GOTMPDIR=...` for the Go toolchain directly. **Don't add an
+export for this to a WP prompt** — every dispatched process already inherits it. If a
+gate run still hits `disk quota exceeded` on `/tmp`, that's a regression in the host
+default, not something to work around per-dispatch.
+
 ### Definition of done — paste into every WP prompt verbatim
 
 §3 below is the coordinator's own post-hoc verification checklist. Give the agent the

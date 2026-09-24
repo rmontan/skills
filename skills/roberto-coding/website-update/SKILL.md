@@ -24,9 +24,9 @@ carry contact_sync2's own conventions across that boundary, on purpose.
 
 | Hostname | Directory | Branch | Purpose | Reaches Cloudflare? |
 |---|---|---|---|---|
-| `contactz.app` | `~/code/web-contact-sync` | `main` | **Production.** The live "coming soon" splash page today. Becomes the full marketing site once `dev2` merges into `main` — see "The dev2 cutover" below. | Yes — the only branch `.github/workflows/deploy.yml` deploys |
-| `dev.contactz.app` | `~/code/web-contact-sync` | `dev` | Local-only staging for `main`'s splash page. `wrangler pages dev`, systemd `web-contact-sync-dev.service` on mnt1. | No |
-| `dev2.contactz.app` | `~/code/web-contact-sync-dev2` (a separate worktree — own `node_modules`, own local D1 state) | `dev2` | Local-only staging for the **future** full marketing site, including the Freemius checkout integration. Not live yet. Merges into `main` when ready, replacing the coming-soon splash. `wrangler pages dev`, systemd `web-contact-sync-dev2.service` on mnt1. | No |
+| `contactz.app` | `~/code/web-contact-sync` | `main` | **Production.** The full multi-page marketing site (home, how it works, features, pricing waiting-list, about, security, FAQ) — `dev2` cut over into `main` on 2026-09-17, replacing the old "coming soon" splash. | Yes — the only branch `.github/workflows/deploy.yml` deploys |
+| `dev.contactz.app` | `~/code/web-contact-sync` | `dev` | Local-only staging for `main`, now a near-mirror of it (post-cutover). `wrangler pages dev`, systemd `web-contact-sync-dev.service` on mnt1. | No |
+| `dev2.contactz.app` | `~/code/web-contact-sync-dev2` (a separate worktree — own `node_modules`, own local D1 state) | `dev2` | Where further site/Freemius-integration work still happens ahead of the next promotion into `dev`/`main` — e.g. it still carries `(site)/privacy` as a placeholder page that was deliberately dropped from `dev`/`main`. `wrangler pages dev`, systemd `web-contact-sync-dev2.service` on mnt1. | No |
 | `devapp.contactz.app` | `~/code/contact_sync2` (this repo) | `main` | The product application itself (not the marketing site) — internal test deployment, Docker on mnt1. | No |
 | `app.contactz.app` (future) | `~/code/contact_sync2` (this repo) | not built yet | Planned production deployment of the product application. | No |
 
@@ -38,13 +38,18 @@ share one `.git` and history, just checked out on different branches
 
 ## The dev2 cutover — not this skill's job
 
-`dev2` is deliberately built out separately from `main` so today's live splash page
-keeps working undisturbed while the full site is built. When it's ready, the owner's
-own documented workflow (in that repo's README) is: `git checkout main && git merge
-dev2 && git push` — the same `main` → GitHub Actions → Cloudflare pipeline, no CI
-changes needed. **Never perform that cutover as a side effect of an unrelated
-change** — merging `dev2` into `main` is a production-deploy decision for the repo
-owner to make explicitly, not something to bundle into a smaller task.
+The first `dev2` → `dev` → `main` cutover happened 2026-09-17 (`git merge dev2`
+into `dev`, then `git merge dev` into `main`, each pushed separately). `dev2`
+remains an active, ongoing-development branch though — it's expected to diverge
+from `dev`/`main` again as new work lands there (e.g. it still has the placeholder
+`(site)/privacy` page that was intentionally dropped from `dev`/`main`), and will
+need another deliberate promotion later. The owner's documented workflow (in that
+repo's README) for that is: `git checkout dev && git merge dev2 && git push`, then
+`git checkout main && git merge dev && git push` — the same `main` → GitHub Actions
+→ Cloudflare pipeline, no CI changes needed. **Never perform that promotion as a
+side effect of an unrelated change** — merging into `main` is a production-deploy
+decision for the repo owner to make explicitly, not something to bundle into a
+smaller task.
 
 ## Core rule: follow the target repo's OWN conventions, not this one's
 
@@ -77,6 +82,31 @@ in the website repo from here:
   line from within `contact_sync2` as a normal doc edit, so the fact lives in one
   place instead of being rediscovered later. Don't duplicate its content into the
   website repo.
+
+## Sitemap and IndexNow (added 2026-09-17)
+
+`src/lib/site-routes.json` is the single source of truth for which routes are
+public — both `src/app/sitemap.ts` (reads it directly) and
+`scripts/indexnow-submit.mjs` (reads it to build the URL list it POSTs to
+api.indexnow.org) key off this one file. **Adding or removing a page under
+`(site)/` must include updating `site-routes.json`** — the sitemap and the
+IndexNow submission will otherwise silently omit or wrongly include a route.
+
+IndexNow submission itself is **already automatic**: `.github/workflows/deploy.yml`
+runs `pnpm indexnow` (best-effort, `continue-on-error: true`) right after every
+`wrangler pages deploy` on a push to `main`. There is nothing to remember to run
+by hand for a `main` push — just don't forget the `site-routes.json` update
+*before* pushing, since the deploy (and the IndexNow submission that follows it)
+will otherwise go out against a stale route list. This only reaches Bing/Yandex/
+Seznam/Naver, not Google — Google doesn't support IndexNow and still needs a
+manual Search Console sitemap resubmission, which is account-level and outside
+what any of this can do.
+
+`dev`/`dev2` also carry `site-routes.json` and the IndexNow script/key file for
+parity (avoids merge drift at the next promotion), but their
+`.github/workflows/deploy.yml` step never actually fires — the workflow only
+triggers on pushes to `main`, and `dev`/`dev2` aren't publicly resolvable hosts
+anyway.
 
 ## Workflow
 
