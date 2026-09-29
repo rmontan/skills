@@ -2,13 +2,13 @@
 name: server-management
 description: |
   Use when managing srv1 (production), mnt1 (personal server), sandbox (test server),
-  or nas (TrueNAS Scale) — SSH connections, Docker containers, package updates,
+  tmp1 (temporary Hetzner server), or nas (TrueNAS Scale) — SSH connections, Docker containers, package updates,
   code deployment, log analysis, or checking service/firewall status on the home lab.
-  Access via `ssh srv1`, `ssh mnt1`, `ssh sandbox`, `ssh nas`. All Linux hosts have a
+  Access via `ssh srv1`, `ssh mnt1`, `ssh sandbox`, `ssh tmp1`, `ssh nas`. All Linux hosts have a
   passwordless-sudo `roberto` user; nas is GUI-managed only, no CLI Docker/app changes.
 license: MIT
 metadata:
-  version: "2.1.0"
+  version: "2.2.0"
   category: infrastructure
   servers:
     srv1:
@@ -38,6 +38,15 @@ metadata:
       user: roberto (passwordless sudo)
       hosting: VM on nas
       management: full, with confirmation for dangerous ops
+    tmp1:
+      alias: tmp1
+      connection: ssh tmp1 (from the Mac or mnt1)
+      ip: 2.29.62.35
+      os: Ubuntu 26.04 LTS
+      role: Temporary server (added 2026-09)
+      user: roberto (passwordless sudo)
+      hosting: Hetzner, host firewall is ufw (active)
+      management: full, with confirmation for dangerous ops
     nas:
       alias: nas
       connection: ssh nas
@@ -50,10 +59,10 @@ metadata:
 
 ## Overview
 
-Four machines: **srv1** (production), **mnt1** (personal), **sandbox** (test), **nas**
-(TrueNAS, GUI-only). All Linux hosts (srv1/mnt1/sandbox) run Docker under the
-`roberto` user, which has passwordless sudo. SSH between all hosts is
-passwordless.
+Five machines: **srv1** (production), **mnt1** (personal), **sandbox** (test), **tmp1**
+(temporary), **nas** (TrueNAS, GUI-only). All Linux hosts (srv1/mnt1/sandbox/tmp1) run
+Docker under the `roberto` user, which has passwordless sudo. SSH is passwordless
+along the paths listed under Network Topology.
 
 ## Network Topology
 
@@ -79,10 +88,26 @@ passwordless.
 - **srv1**: hosted on Hetzner behind its own firewall — allows all traffic from the home network's public IP, and only ports 80/443 from everywhere else.
 - **NPM (Nginx Proxy Manager)** runs on nas and is the single reverse proxy for external access to services on nas, mnt1, and sandbox. Any service on those three that needs external exposure goes through NPM, not a direct port-forward.
 - External access to services on **srv1** goes through its own Hetzner-side setup (ports 80/443 only) — srv1 is not behind NPM since NPM lives on the home network.
+- **tmp1** (2.29.62.35): temporary Hetzner server, not shown in the diagram. Reachable
+  from the **Mac** and from **mnt1** (`ssh tmp1`); sandbox has no alias for it, and tmp1
+  has no SSH config/keys to reach anything else (treat it as a leaf, like srv1). Its
+  firewall is **ufw** on the host: OpenSSH from anywhere, plus specific ports from the
+  home NAT IP only (81.56.206.190). Services publish via `network_mode: host`, not
+  Docker port mappings, because Docker-published ports bypass ufw.
+
+## Monitoring (Beszel)
+
+Central Beszel hub on **sandbox**: `/docker/beszel/`, UI at http://10.10.10.233:8090.
+Agents: sandbox (same compose, via unix socket), mnt1 `/docker/beszel-agent/`
+(:45876), tmp1 `/docker/beszel/` (agent-only, :45876, ufw-allowed from home NAT IP).
+srv1 has no agent, on purpose. Systems are defined in
+`/docker/beszel/data/beszel_data/config.yml` on sandbox and synced on hub restart —
+that file is authoritative (systems missing from it are removed), so add new hosts
+there, not only in the UI. The hub's public key is the `KEY` in each agent's compose file.
 
 ## Step 1: Identify the Target Host
 
-Parse the user's request to a single target: `srv1`, `mnt1`, `sandbox`, or `nas`.
+Parse the user's request to a single target: `srv1`, `mnt1`, `sandbox`, `tmp1`, or `nas`.
 If the task requires hopping between hosts (e.g. deploying from mnt1 to srv1),
 identify every hop up front — remember srv1 cannot initiate outbound hops.
 
@@ -171,7 +196,7 @@ managed through the TrueNAS web UI.
 **If a blocked operation is requested:** explain that TrueNAS management goes
 through the web UI, and offer to check current status via CLI instead.
 
-### srv1, mnt1, sandbox (Ubuntu) — full management, roberto user
+### srv1, mnt1, sandbox, tmp1 (Ubuntu) — full management, roberto user
 
 **Allowed freely:**
 - Diagnostics: `uptime`, `df -h`, `free -h`, `lsblk`, `ps aux`, `top`, `ss`, `curl`, `ping`
@@ -193,9 +218,13 @@ through the web UI, and offer to check current status via CLI instead.
 **srv1-specific:** confirm you're not trying to hop *from* srv1 to another
 host — it can't, and the attempt will just hang until timeout.
 
+**tmp1-specific:** it's a temporary box, so there's no skillshare, no
+`~/.config/server/credentials.env`, and no uid-1001 `docker` account (see Docker
+Convention). Firewall changes there mean `ufw`, and still need confirmation.
+
 ---
 
-## Docker Convention (srv1, mnt1, sandbox)
+## Docker Convention (srv1, mnt1, sandbox, tmp1)
 
 Every container lives under **`/docker/<container-name>/`**, and every volume
 that container mounts must be a subdirectory of that same folder. No
@@ -221,6 +250,8 @@ account (named `docker`) and a gid-110 group backing this (named `docker` on srv
 Docker daemon-socket group, so it can both administer containers (`docker ps`,
 `compose up`, etc.) and own/read/write the `1001:110` bind-mounted data without sudo.
 Before assuming this is set up on a *new* host, verify with `id docker`.
+**tmp1 exception:** no uid-1001/gid-110 exists there (`roberto` is 1000 and in the
+socket group 983), so its existing containers run with the image default user.
 
 **Bind mounts only:** all persistent data uses bind mounts (`./data/...`) —
 named or anonymous Docker volumes are forbidden. See the Quick Reference below.
