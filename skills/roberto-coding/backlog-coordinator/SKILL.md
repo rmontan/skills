@@ -389,6 +389,37 @@ Surface what happened (what the agent produced or didn't, the specific failure) 
 the user decide whether to re-dispatch, take it over by hand, or stop. Do not silently
 loop the dispatch.
 
+#### Triage every follow-up before the gate — none may end as prose
+Read each agent's final report (and anything its REQ's notes now say) for follow-ups:
+seam findings, "not fixed here", "worth its own REQ", deferred options, stale comments it
+noticed, dead code it left. Sort **every one** into exactly one bucket **now, before
+step 9's integration gate**, so a tidy-up rides the gate and CI run you are about to pay
+for anyway:
+
+1. **Small, and inside the files this WP already owns** — a stale comment, a dead helper,
+   a duplicate within its own files, a test-helper fix, a missing test for code it wrote.
+   **Resume the same agent** (e.g. `SendMessage` to its id — not a fresh dispatch; it
+   still holds the context) with the items as an explicit extra task and the same
+   definition-of-done, then re-verify the WP. This is not the failed-agent re-dispatch
+   above and needs no user approval: the WP succeeded, it is being asked to finish its
+   own area.
+2. **Small, but in files the WP does not own** — file a REQ **now** (request-intake,
+   structured-brief mode), naming the file, and note it as a bundling candidate so step 4
+   rides it on the next WP that touches that file. Do not widen this WP: disjoint
+   ownership is what keeps parallel agents from colliding.
+3. **Needs an owner decision, touches a data-loss/security path the profile names, or
+   would score high-coupling** — file a REQ with the question in it; surface it in the
+   report.
+
+Then write each follow-up's outcome next to it in the REQ's notes — "done in this WP" or
+`[[REQ-NNNN]]` — before step 10 sets `done`. **A sentence in a closing note is not a filed
+follow-up.** Observed cost when this step did not exist (contact_sync2, 2026-09-29): a
+30-day sweep found ~80 follow-ups sitting in closing notes of `done` REQs, one of them a
+live write-back bug declared in a code comment for 16 days — and every one would have
+cost a fresh worktree, gate and CI round to fix later, where bucket 1 would have cost one
+more agent turn. If the profile defines a check for unlinked follow-ups, it enforces this;
+a WP may not add an allow row to pass it.
+
 ### 8. Integrate
 Do the reserved composition-root wiring yourself (the files the profile marks
 coordinator-owned). Resolve cross-WP conflicts. Keep these edits minimal and
@@ -468,7 +499,8 @@ does:
 
 ### 11. Report
 Summarize: which REQs shipped (with PR links), which were deferred and why, the
-follow-up REQs filed per step 8's mandatory scan of each agent's own final report
+follow-ups triaged per step 7's "Triage every follow-up" (done in the WP, or filed — with
+their new REQ ids), the follow-up REQs filed per step 8's mandatory scan of each agent's own final report
 (with their new REQ ids — this should already be done by the time you write this
 summary, not triggered by the user asking for it), and the final backlog state.
 
