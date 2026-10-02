@@ -46,16 +46,16 @@ through merge* (you may push, open PRs, wait for CI, and merge without pausing),
 what keep autonomy safe. The one thing you never skip is the merge verdict + trial merge
 before you merge.
 
-**Tiered gates.** A profile may split verification into tiers: a cheap **WP closing gate**
-(e.g. a gate that runs only the changed packages and their reverse dependencies, forcing
-the full gate for paths it names), a **merge verdict** that is the full gate run once per
-change by branch CI, and **nightly extras** (shuffle, race, slow checks). When it does,
-follow its tiers wherever this skill says "green gate": the WP's prompt and step 7 use the
-closing gate, and step 9/10 take green branch CI (every check, `gh pr checks`) as the
-verdict, not a second full local run. When the profile defines no tiers, the full gate
-is all three. Either way the trial merge stays, and so does reading the latest nightly
-at the start of a run if the profile has one — a red nightly is filed (request-intake)
-before anything is dispatched.
+**Gates.** Verification runs at three levels, each named in the profile:
+- the **WP closing gate** — cheap, runs what the diff can affect (e.g. a `gate-impacted`
+  target), and runs the full gate by itself for paths the profile forces. WP agents
+  close on it; you run it in steps 7 and 9.
+- the **merge verdict** — the full gate, run **once** per change by branch CI on your
+  pushed integration branch (every check, `gh pr checks`). You never run a second full
+  gate locally.
+- **nightly extras** (shuffle, race, slow checks), if the profile has them. At the start
+  of a run, read the latest nightly; a red one is filed (request-intake) before anything
+  is dispatched.
 
 ## On-demand: list the ready queue (no dispatch)
 When asked to show or list the open/ready requests — "what's in the backlog", "list
@@ -205,8 +205,7 @@ Group the prioritized work into WPs sized for one coding agent each:
   most one schema-touching WP per parallel wave so migration numbers don't collide).
 - Each WP prompt must state: the worktree + branch, the scope and ownership boundary,
   the acceptance criteria (copy from the REQ), the requirement to add **unit tests**
-  for new logic, the profile's WP closing gate (the full green gate if it defines no
-  tiers), **"commit locally; do NOT push or
+  for new logic, the profile's WP closing gate, **"commit locally; do NOT push or
   open a PR"** (you own integration), and the **definition-of-done checklist**
   (`references/dispatch-playbook.md` §2's Definition-of-done subsection) verbatim —
   it hands the agent the same self-check you'd otherwise have to run yourself at
@@ -382,12 +381,9 @@ each completed WP (see the playbook for commands):
 - **Ownership check** — the agent only touched its declared scope; composition roots
   untouched.
 - **Migration check** — per the profile's schema rule.
-- **Green gate** — run the profile's install + **WP closing gate** (the full gate when
-  the profile defines no tiers; with tiers, the full gate is branch CI's job and this
-  check confirms the closing gate on the WP's own diff). Skip this one check when
-  the WP is the only WP in its wave: step 9 re-runs the full gate on the integrated
-  tree, and for a lone WP that tree is the same diff, so a second run here would tell
-  you nothing new before it tells you again. Run it whenever the wave has more than one
+- **Closing gate** — run the profile's install + WP closing gate on the WP's branch.
+  Skip it when the WP is the only WP in its wave: step 9 runs the same gate on the
+  integrated tree, which for a lone WP is the same diff. Run it whenever the wave has more than one
   WP — once WPs are combined, a failure at step 9 can no longer be pinned on a single
   WP, and this pass is what keeps it attributable instead of forcing a bisect across
   all of them after the fact.
@@ -442,10 +438,8 @@ coordinator-scoped.
 ### 9. Integration testing
 This is your responsibility, not the per-WP agents'. Per the profile's integration /
 smoke / e2e docs:
-- Re-run the gate on the integrated tree: the full green gate, or — when the profile
-  defines tiers — its closing gate locally, with branch CI's full run as the verdict
-  (step 10). A WP whose diff hits the profile's forced-full paths runs the full gate
-  either way.
+- Run the WP closing gate on the integrated tree. The full gate is branch CI's, in
+  step 10.
 - Run the smoke checks and, where the change touches the relevant pipeline/area, the
   integration / E2E harness the profile points to.
 - Confirm the REQ's acceptance criteria actually pass end-to-end, including the
@@ -504,9 +498,8 @@ does:
   disappearing into your PR's history.
 - Push the branch; open the PR with `gh`, body ending in the profile's PR footer.
 - Commits end with the profile's commit footer.
-- Wait for CI to go green (the profile's CI workflow; read every check, not one
-  workflow). Under tiered gates this run **is** the merge verdict — the one full gate
-  the change gets. If CI fails, fix or
+- Wait for CI to go green (read every check, not one workflow). This run **is** the
+  merge verdict — the one full gate the change gets. If CI fails, fix or
   re-dispatch, then re-push — do not merge red.
 - Merge once green. Then set each delivered REQ's `status: done` and update the
   `<backlog>/BACKLOG.md` index row.

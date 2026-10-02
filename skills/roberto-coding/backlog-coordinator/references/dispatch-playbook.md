@@ -6,10 +6,11 @@ The values in angle brackets come from the **project profile**
 disagree, the profile wins — re-read it.
 
 Placeholders used below:
-- `<gate>` — the profile's green-gate command (e.g. `pnpm -r typecheck && pnpm -r test && pnpm -r build`).
-- `<wp-gate>` — the profile's **WP closing gate** when it defines tiered gates (e.g. a
-  `gate-impacted` target that runs the changed packages plus reverse dependencies);
-  otherwise the same as `<gate>`. Under tiers, branch CI's full run is the merge verdict.
+- `<gate>` — the profile's full gate. Branch CI runs it once per change; that run is
+  the merge verdict. You do not run it locally.
+- `<wp-gate>` — the profile's **WP closing gate** (e.g. `make gate-impacted`: the changed
+  packages plus their reverse dependencies). WP agents close on it; you run it in
+  verification and integration.
 - `<install>` — the profile's install command (e.g. `pnpm install`).
 - `<main>` — the default branch (usually `main`).
 - `<migrations-dir>` / `<migration-rule>` — from the profile.
@@ -104,7 +105,7 @@ Use the profile's `<dispatch>` mode (or the tier-selected one):
   correct WP branch, then re-run the full verification in §3 yourself before
   trusting it — don't take the agent's own gate/test claims for a worktree it
   couldn't actually reach as-instructed.
-  **A dispatched subagent must run `<gate>` (and any other verification command)
+  **A dispatched subagent must run `<wp-gate>` (and any other verification command)
   in the foreground, not backgrounded.** The general Bash-tool guidance every
   Claude agent sees suggests backgrounding a long-running command and ending
   the turn to await a completion notification — that convention only resumes
@@ -257,7 +258,7 @@ git --no-pager diff --stat origin/<main>...HEAD
 # Migrations: per <migration-rule> (e.g. additive only, at most one new file, correct next number)
 ls <migrations-dir>
 
-# Green gate — the WP closing gate; under tiered gates branch CI runs the full <gate>
+# Closing gate (branch CI runs the full <gate> later)
 <install>
 <wp-gate>
 ```
@@ -304,7 +305,7 @@ worker/queue registry, a route-registration file). Keep these edits minimal — 
 expose dependencies; you connect them.
 
 ## 6. Integration testing
-On the integrated tree (after wiring), beyond the green gate, run what the profile's
+On the integrated tree (after wiring), beyond the closing gate, run what the profile's
 integration / smoke / e2e docs prescribe. Confirm the REQ's acceptance criteria pass
 end-to-end and the profile's **domain invariants** still hold.
 
@@ -316,8 +317,8 @@ git push -u origin wp-<wp>
 gh pr create --fill --base <main> --head wp-<wp>   # body ends with the profile's PR footer
 gh pr checks --watch                               # wait for the profile's CI workflow
 ```
-- Under tiered gates this CI run is the merge verdict: every check green and a clean
-  trial merge, no second full local gate.
+- This CI run is the merge verdict: every check green plus a clean trial merge. No
+  full local gate on top of it.
 - Commit messages end with the profile's commit footer.
 - If CI is red: diagnose, fix or re-dispatch, re-push. **Never merge red.**
 - **Remove the worktree before merging, not after.** `git branch -d`/`-D` and
