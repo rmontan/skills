@@ -7,6 +7,9 @@ disagree, the profile wins — re-read it.
 
 Placeholders used below:
 - `<gate>` — the profile's green-gate command (e.g. `pnpm -r typecheck && pnpm -r test && pnpm -r build`).
+- `<wp-gate>` — the profile's **WP closing gate** when it defines tiered gates (e.g. a
+  `gate-impacted` target that runs the changed packages plus reverse dependencies);
+  otherwise the same as `<gate>`. Under tiers, branch CI's full run is the merge verdict.
 - `<install>` — the profile's install command (e.g. `pnpm install`).
 - `<main>` — the default branch (usually `main`).
 - `<migrations-dir>` / `<migration-rule>` — from the profile.
@@ -113,7 +116,7 @@ Use the profile's `<dispatch>` mode (or the tier-selected one):
 - **By hand** — implement the WP yourself in the worktree, committing locally.
 
 The prompt must be self-contained and include: worktree/branch, scope + ownership
-boundary, acceptance criteria, "add unit tests for new logic", the green-gate
+boundary, acceptance criteria, "add unit tests for new logic", the `<wp-gate>`
 requirement, "commit locally; do not push/PR", **and the definition-of-done checklist
 below, verbatim.** Match the project's work-package style guide if it has one.
 
@@ -195,10 +198,10 @@ load-bearing and keep the full checklist — this calibration is permission to g
 lighter on low-stakes changes, not a default toward skipping it.
 
 > Before you report this work package done:
-> 1. Run `<install>` and `<gate>` yourself, **in the foreground — do not background
+> 1. Run `<install>` and `<wp-gate>` yourself, **in the foreground — do not background
 >    the command and end your turn expecting a notification when it finishes.** That
 >    convention resumes the coordinator's own session; it does not resume you. If you
->    background `<gate>` and stop here, you will report this WP done before
+>    background `<wp-gate>` and stop here, you will report this WP done before
 >    verification actually ran, silently. Block on the real exit code. If it fails,
 >    fix it and re-run — keep iterating until it's actually green. Don't hand back a
 >    red or unverified result on the theory that the coordinator will catch it; that
@@ -254,9 +257,9 @@ git --no-pager diff --stat origin/<main>...HEAD
 # Migrations: per <migration-rule> (e.g. additive only, at most one new file, correct next number)
 ls <migrations-dir>
 
-# Green gate
+# Green gate — the WP closing gate; under tiered gates branch CI runs the full <gate>
 <install>
-<gate>
+<wp-gate>
 ```
 A WP should add tests, never silently drop coverage (compare against the profile's
 baseline test counts if it records them). If verification fails, re-dispatch with the
@@ -313,6 +316,8 @@ git push -u origin wp-<wp>
 gh pr create --fill --base <main> --head wp-<wp>   # body ends with the profile's PR footer
 gh pr checks --watch                               # wait for the profile's CI workflow
 ```
+- Under tiered gates this CI run is the merge verdict: every check green and a clean
+  trial merge, no second full local gate.
 - Commit messages end with the profile's commit footer.
 - If CI is red: diagnose, fix or re-dispatch, re-push. **Never merge red.**
 - **Remove the worktree before merging, not after.** `git branch -d`/`-D` and
