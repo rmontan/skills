@@ -1,10 +1,10 @@
 ---
 name: server-management
 description: |
-  Use when managing srv1 (production), mnt1 (personal server), sandbox (test server),
+  Use when managing srv1 (production), czap1 (contactzapp production), mnt1 (personal server), sandbox (test server),
   tmp1 (temporary Hetzner server), or nas (TrueNAS Scale) — SSH connections, Docker containers, package updates,
   code deployment, log analysis, or checking service/firewall status on the home lab.
-  Access via `ssh srv1`, `ssh mnt1`, `ssh sandbox`, `ssh tmp1`, `ssh nas`. All Linux hosts have a
+  Access via `ssh srv1`, `ssh czap1`, `ssh mnt1`, `ssh sandbox`, `ssh tmp1`, `ssh nas`. All Linux hosts have a
   passwordless-sudo `roberto` user; nas is GUI-managed only, no CLI Docker/app changes.
 license: MIT
 metadata:
@@ -59,8 +59,8 @@ metadata:
 
 ## Overview
 
-Five machines: **srv1** (production), **mnt1** (personal), **sandbox** (test), **tmp1**
-(temporary), **nas** (TrueNAS, GUI-only). All Linux hosts (srv1/mnt1/sandbox/tmp1) run
+Six machines: **srv1** (production), **czap1** (production server for contactzapp), **mnt1** (personal), **sandbox** (test), **tmp1**
+(temporary), **nas** (TrueNAS, GUI-only). All Linux hosts (srv1/czap1/mnt1/sandbox/tmp1) run
 Docker under the `roberto` user, which has passwordless sudo. SSH is passwordless
 along the paths listed under Network Topology.
 
@@ -88,6 +88,10 @@ along the paths listed under Network Topology.
 - **srv1**: hosted on Hetzner behind its own firewall — allows all traffic from the home network's public IP, and only ports 80/443 from everywhere else.
 - **NPM (Nginx Proxy Manager)** runs on nas and is the single reverse proxy for external access to services on nas, mnt1, and sandbox. Any service on those three that needs external exposure goes through NPM, not a direct port-forward.
 - External access to services on **srv1** goes through its own Hetzner-side setup (ports 80/443 only) — srv1 is not behind NPM since NPM lives on the home network.
+- **czap1** (2.31.19.232): production server for **contactzapp** (public site `app.contactz.app`).
+  Reachable from the **Mac** (`ssh czap1`) and from **mnt1** (`ssh czap1`, h2h key). `roberto`
+  user with passwordless sudo. Treat as a leaf like srv1: it has no SSH keys to reach
+  anything else. It is production, so apply the same confirmation discipline.
 - **tmp1** (2.29.62.35): temporary Hetzner server, not shown in the diagram. Reachable
   from the **Mac** and from **mnt1** (`ssh tmp1`); sandbox has no alias for it, and tmp1
   has no SSH config/keys to reach anything else (treat it as a leaf, like srv1). Its
@@ -107,7 +111,7 @@ there, not only in the UI. The hub's public key is the `KEY` in each agent's com
 
 ## Step 1: Identify the Target Host
 
-Parse the user's request to a single target: `srv1`, `mnt1`, `sandbox`, `tmp1`, or `nas`.
+Parse the user's request to a single target: `srv1`, `czap1`, `mnt1`, `sandbox`, `tmp1`, or `nas`.
 If the task requires hopping between hosts (e.g. deploying from mnt1 to srv1),
 identify every hop up front — remember srv1 cannot initiate outbound hops.
 
@@ -196,7 +200,7 @@ managed through the TrueNAS web UI.
 **If a blocked operation is requested:** explain that TrueNAS management goes
 through the web UI, and offer to check current status via CLI instead.
 
-### srv1, mnt1, sandbox, tmp1 (Ubuntu) — full management, roberto user
+### srv1, czap1, mnt1, sandbox, tmp1 (Ubuntu) — full management, roberto user
 
 **Allowed freely:**
 - Diagnostics: `uptime`, `df -h`, `free -h`, `lsblk`, `ps aux`, `top`, `ss`, `curl`, `ping`
