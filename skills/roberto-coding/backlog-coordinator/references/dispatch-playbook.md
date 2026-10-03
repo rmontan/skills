@@ -86,9 +86,7 @@ Use the profile's `<dispatch>` mode (or the tier-selected one):
   ```
   Any other name is a leak: §7's teardown deletes these two paths and nothing else, so
   a file called `<wp>-prompt.md`, or one parked in a `.worktrees/.prompts/` bucket,
-  survives every subsequent wave. Audited 2026-09-15: `.worktrees/` held 30 orphaned
-  logs and prompts going back to REQ-0371 in three different naming styles, plus
-  313 MB of stale `.opencode-data` — all for REQs long since `done`.
+  survives every subsequent wave and accumulates for REQs long since `done`.
 - **Claude subagents** — launch the `Agent` tool (general-purpose) with the
   work-package prompt; have it commit locally in the worktree. **Do not pass
   `isolation: "worktree"` (or `"remote"`) on this call.** That parameter creates a
@@ -96,11 +94,8 @@ Use the profile's `<dispatch>` mode (or the tier-selected one):
   `worktree-agent-<id>`) and silently confines the agent's git/filesystem access to
   it — the WP prompt's instruction to `cd` into `.worktrees/<wp>` and commit on
   `wp-<wp>` then can't actually be followed, because step 1's worktree already
-  provides the isolation this mode needs. Observed twice in one dispatch wave
-  (2026-08-23): both agents committed real, correct work onto the auto-created
-  branch instead of the assigned one, and one also produced a confusing early stub
-  response before a real final report followed on the same task-id — plausibly the
-  same conflict, not a separate bug. Leave `isolation` unset; if it happens anyway,
+  provides the isolation this mode needs. The agent then commits correct work onto the
+  auto-created branch instead of the assigned one. Leave `isolation` unset; if it happens anyway,
   recover with `git diff <base>..<agent-commit>` / `git cherry-pick` onto the
   correct WP branch, then re-run the full verification in §3 yourself before
   trusting it — don't take the agent's own gate/test claims for a worktree it
@@ -315,9 +310,7 @@ gh pr checks --watch                               # wait for the profile's CI w
 - **Remove the worktree before merging, not after.** `git branch -d`/`-D` and
   `gh pr merge --delete-branch` both refuse to delete a branch that's still checked
   out in a worktree — silently, from the coordinator's perspective, since the PR
-  still shows as merged. Observed at scale (2026-09-03): a repo audited after months
-  of coordinator waves had accumulated **~250 dead branches**, nearly all already
-  merged, because this step ran in the wrong order every time. Do it in this order:
+  still shows as merged, so dead branches pile up wave after wave. Do it in this order:
 ```bash
 git worktree remove .worktrees/<wp>
 rm -rf .worktrees/<wp>.log .worktrees/<wp>.prompt.md .worktrees/.opencode-data/<wp>
