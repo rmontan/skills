@@ -24,7 +24,7 @@ carry contact_sync2's own conventions across that boundary, on purpose.
 
 | Hostname | Directory | Branch | Purpose | Reaches Cloudflare? |
 |---|---|---|---|---|
-| `contactz.app` | `~/code/web-contact-sync` | `main` | **Production.** The full multi-page marketing site (home, how it works, features, pricing waiting-list, about, security, FAQ) — `dev2` cut over into `main` on 2026-09-17, replacing the old "coming soon" splash. | Yes — the only branch `.github/workflows/deploy.yml` deploys |
+| `contactz.app` | `~/code/web-contact-sync` | `main` | **Production.** The full multi-page marketing site (home, how it works, features, pricing waiting-list, about, security, FAQ) Receives promoted work from `dev2` via `dev`. | Yes — the only branch `.github/workflows/deploy.yml` deploys |
 | `dev.contactz.app` | `~/code/web-contact-sync` | `dev` | Local-only staging for `main`, now a near-mirror of it (post-cutover). `wrangler pages dev`, systemd `web-contact-sync-dev.service` on mnt1. | No |
 | `dev2.contactz.app` | `~/code/web-contact-sync-dev2` (a separate worktree — own `node_modules`, own local D1 state) | `dev2` | Where further site/Freemius-integration work still happens ahead of the next promotion into `dev`/`main` — e.g. it still carries `(site)/privacy` as a placeholder page that was deliberately dropped from `dev`/`main`. `wrangler pages dev`, systemd `web-contact-sync-dev2.service` on mnt1. | No |
 | `devapp.contactz.app` | `~/code/contact_sync2` (this repo) | `main` | The product application itself (not the marketing site) — internal test deployment, Docker on mnt1. | No |
@@ -36,11 +36,10 @@ share one `.git` and history, just checked out on different branches
 (`dev`/`main` vs `dev2`). Confirm with `git -C <dir> remote -v` and
 `git -C <dir> branch --show-current` if this table looks stale.
 
-## The dev2 cutover — not this skill's job
+## Promoting dev2 — not this skill's job
 
-The first `dev2` → `dev` → `main` cutover happened 2026-09-17 (`git merge dev2`
-into `dev`, then `git merge dev` into `main`, each pushed separately). `dev2`
-remains an active, ongoing-development branch though — it's expected to diverge
+`dev2` is an active development branch, promoted by `git merge dev2` into `dev`, then
+`git merge dev` into `main`, each pushed separately. It is expected to diverge
 from `dev`/`main` again as new work lands there (e.g. it still has the placeholder
 `(site)/privacy` page that was intentionally dropped from `dev`/`main`), and will
 need another deliberate promotion later. The owner's documented workflow (in that
@@ -83,7 +82,7 @@ in the website repo from here:
   place instead of being rediscovered later. Don't duplicate its content into the
   website repo.
 
-## Sitemap and IndexNow (added 2026-09-17)
+## Sitemap and IndexNow
 
 `src/lib/site-routes.json` is the single source of truth for which routes are
 public — both `src/app/sitemap.ts` (reads it directly) and
