@@ -80,7 +80,7 @@ along the paths listed under Network Topology.
    mnt1 ↔ sandbox ↔ srv1 (mesh; srv1 accepts inbound only)
 ```
 
-- **Mac → all four**: full SSH access, passwordless. This is the starting point for everything.
+- **Mac → every host** (srv1, czap1, mnt1, sandbox, tmp1, nas): full SSH access, passwordless. This is the starting point for everything.
 - **mnt1 ↔ sandbox**: can SSH to each other.
 - **mnt1 → srv1** and **sandbox → srv1**: can SSH in.
 - **srv1 → anything**: cannot initiate SSH out to mnt1, sandbox, or nas. srv1 is a one-way-in leaf node.
@@ -118,7 +118,7 @@ identify every hop up front — remember srv1 cannot initiate outbound hops.
 ## Step 2: Check Whether You Are Already On The Target
 
 **Do not assume the session is running on the Mac.** Claude Code sessions also
-run *on* srv1, mnt1, and sandbox. If you are already on the target host, `ssh
+run *on* srv1, czap1, mnt1, sandbox, and tmp1. If you are already on the target host, `ssh
 <target> '...'` is a pointless self-hop — and it will usually fail, because the
 `~/.ssh/id_ed25519` on those hosts is passphrase-encrypted and no ssh-agent is
 available in a non-interactive session. The error looks like an access problem
@@ -175,8 +175,8 @@ off a previous command's connection.
 ## Step 4: Execute the Task
 
 Apply the server-specific rules below. For dangerous operations, always use
-the confirmation template regardless of which server (srv1, mnt1, sandbox all
-follow the same rule — production gets no special exemption or extra strictness,
+the confirmation template regardless of which server (srv1, czap1, mnt1, sandbox,
+tmp1 all follow the same rule — production gets no special exemption or extra strictness,
 just the same discipline).
 
 ---
@@ -228,7 +228,7 @@ Convention). Firewall changes there mean `ufw`, and still need confirmation.
 
 ---
 
-## Docker Convention (srv1, mnt1, sandbox, tmp1)
+## Docker Convention (all Linux hosts: srv1, czap1, mnt1, sandbox, tmp1)
 
 Every container lives under **`/docker/<container-name>/`**, and every volume
 that container mounts must be a subdirectory of that same folder. No
@@ -247,10 +247,10 @@ exceptions — don't mount volumes elsewhere on the filesystem.
 - Manage with `docker compose` from inside `/docker/<container-name>/` (`ps`, `logs -f`, `restart`, `down`).
 
 **User/group:** containers run as `1001:110`, not root — set `user: "1001:110"` at
-the service level in every `docker-compose.yml`. All three hosts have a uid-1001
+the service level in every `docker-compose.yml`. Every Linux host has a uid-1001
 account (named `docker`) and a gid-110 group backing this (named `docker` on srv1,
 `docker-user` on mnt1/sandbox — the group *name* varies but the GID is always 110).
-`roberto` is a member of that gid-110 group on all three, plus each host's actual
+`roberto` is a member of that gid-110 group on every Linux host, plus each host's actual
 Docker daemon-socket group, so it can both administer containers (`docker ps`,
 `compose up`, etc.) and own/read/write the `1001:110` bind-mounted data without sudo.
 Before assuming this is set up on a *new* host, verify with `id docker`.
@@ -284,7 +284,7 @@ Outside of `/docker/`, srv1 also uses:
 
 ## Dangerous Operation Confirmation
 
-Applies identically on srv1, mnt1, and sandbox — no server gets a pass.
+Applies identically on every Linux host (srv1, czap1, mnt1, sandbox, tmp1) — no server gets a pass.
 
 ```
 I'm going to [ACTION] on [SERVER].
@@ -310,17 +310,19 @@ Proceed? (yes/no)
 
 ## Skills Sync (skillshare)
 
-srv1, mnt1, and sandbox each have `skillshare` installed with `~/.config/skillshare`
+srv1, czap1, mnt1, sandbox, and tmp1 each have `skillshare` installed with `~/.config/skillshare`
 cloned from `git@github.com:rmontan/skills.git` (global mode, `git_root: root`) — this
 is the same repo the Mac's `~/.config/skillshare` syncs from. Skills land symlinked
 into `~/.claude/skills`, `~/.gemini/skills`, and `~/.config/opencode/skills` on all
-three servers (Claude, agy/antigravity, and opencode are used on all of them).
+of them (Claude, agy/antigravity, and opencode are used on all of them).
 
-**"Sync skills to all servers" / "update skills on srv1/mnt1/sandbox" means:**
+**"Sync skills to all servers" / "update skills on srv1/czap1/mnt1/sandbox/tmp1" means:**
 ```bash
 ssh srv1 skillshare pull
+ssh czap1 skillshare pull
 ssh mnt1 skillshare pull
 ssh sandbox skillshare pull
+ssh tmp1 skillshare pull
 ```
 `skillshare pull` does `git pull` + `skillshare sync` in one shot. If a skill was
 edited locally on the Mac first, push it to the repo before pulling on the servers
@@ -334,7 +336,7 @@ should flow through this repo so all hosts stay in sync from one source.
 ## Credentials
 
 Server/service credentials (mail account, SMTP relay, etc.) live in
-`~/.config/server/credentials.env` on srv1, mnt1, and sandbox — never in this skill,
+`~/.config/server/credentials.env` on srv1, czap1, mnt1, sandbox, and tmp1 — never in this skill,
 never in the skillshare repo, never in chat. That file is host-local, deployed
 out-of-band (not via git/skillshare), and not readable without the right permissions
 (root-owned 600 on srv1; roberto-owned 600 on mnt1/sandbox).
@@ -346,14 +348,14 @@ dumping the whole file, and don't echo secret values back into chat or logs.
 
 ## Error Handling
 
-- `Permission denied (publickey)` when connecting **from** srv1/mnt1/sandbox:
+- `Permission denied (publickey)` when connecting **from** srv1/czap1/mnt1/sandbox/tmp1:
   first check you aren't self-hopping (`hostname` — see Step 2). If the target
   really is another host, the cause is almost always the key choice: those hosts
   keep a passphrase-encrypted copy of the Mac key at `~/.ssh/id_ed25519` that
   cannot be used non-interactively. Host-to-host hops must use the unencrypted
   `~/.ssh/id_ed25519_h2h` key, set per-host in `~/.ssh/config` with
   `IdentityFile ~/.ssh/id_ed25519_h2h` + `IdentitiesOnly yes`.
-- SSH fails otherwise: verify alias (`srv1`/`mnt1`/`sandbox`/`nas`), check
+- SSH fails otherwise: verify alias (`srv1`/`czap1`/`mnt1`/`sandbox`/`tmp1`/`nas`), check
   `ssh-add -l`, and remember srv1 can only be reached directly, never via a
   mnt1/sandbox hop.
 - Command fails: show the error, explain the likely cause, suggest a fix,

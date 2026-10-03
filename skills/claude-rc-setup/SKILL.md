@@ -42,7 +42,7 @@ Do NOT use this skill for:
 - Setting up Claude Code itself (assumes `claude` CLI is already installed,
   in `$PATH`, and authenticated on the target host)
 - General SSH/server conventions unrelated to `claude rc` — if the target is
-  one of the home-lab hosts (srv1/mnt1/sandbox/nas), the **server-management**
+  one of the home-lab hosts (srv1/czap1/mnt1/sandbox/tmp1/nas), the **server-management**
   skill covers connection aliases, sudo conventions, and dangerous-operation
   confirmation rules; use both together
 
