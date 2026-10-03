@@ -76,8 +76,10 @@ Use the profile's `<dispatch>` mode (or the tier-selected one):
   the worktree, for example:
   ```bash
   cd .worktrees/<wp>
-  XDG_DATA_HOME="<isolated-data-dir-from-below>" opencode run "<work-package prompt>" -m <model> --dangerously-skip-permissions
+  XDG_DATA_HOME="<isolated-data-dir-from-below>" opencode run "<work-package prompt>" -m <model> --auto
   ```
+  An unrecognised flag makes `opencode run` print its help and exit 0 — a silent no-op
+  dispatch — so check `opencode run --help` when the CLI updates.
   **Name the WP's scratch files for the WP, with these exact paths** — the prompt you
   dispatched and the transcript you captured:
   ```
@@ -138,7 +140,7 @@ mkdir -p "$OC_DATA/opencode"
 cp ~/.local/share/opencode/auth.json ~/.local/share/opencode/account.json "$OC_DATA/opencode/"
 
 cd .worktrees/<wp>
-XDG_DATA_HOME="$OC_DATA" opencode run "<work-package prompt>" -m <model> --dangerously-skip-permissions
+XDG_DATA_HOME="$OC_DATA" opencode run "<work-package prompt>" -m <model> --auto
 ```
 `.worktrees/.opencode-data/<wp>` is a sibling of the WP worktrees, so it's covered by
 the same `.worktrees/` gitignore/exclude entry from step 1 and needs no separate
@@ -224,7 +226,7 @@ lighter on low-stakes changes, not a default toward skipping it.
 >
 >    **Whether you can also *run* it depends on the project.** Check the profile: some
 >    withhold live credentials from dispatched agents deliberately (a secret in reach
->    of `--dangerously-skip-permissions` and a written report is how one leaks), others
+>    of an auto-approving agent and a written report is how one leaks), others
 >    grant them — e.g. because the credential only reaches disposable test data. If the
 >    profile gives you credentials and a way to run a single live test, **run yours and
 >    report what it showed.** If it doesn't, write the test anyway and say plainly in
