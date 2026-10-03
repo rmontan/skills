@@ -23,12 +23,6 @@ remote Linux server, wrapped so it survives SSH drops, its own crashes, and
 full reboots. Also covers how to respawn it safely later, since a naive
 kill-and-restart can silently interrupt in-flight background work.
 
-This was built from hands-on experience standing up `claude rc` on `mnt1`
-for the `contact_sync2` project — including the failure modes actually hit
-(tmux server dying with the last session, a live-migration attempt via
-`reptyr` that's blocked by design, and background workers dying on restart
-even though they looked independent).
-
 ## When to Use
 
 Use this skill when the user:
@@ -73,9 +67,8 @@ ssh <host> "tmux -L claude-rc ls 2>&1; tmux ls 2>&1; ps aux | grep -E 'claude.*r
   `tmux ls` only sees the default socket, so a wrapper on a dedicated socket looks
   absent to it.
 - `tmux ls` failing with `no server running on ...` means any prior tmux
-  wrapper died completely (this is the actual failure mode hit on mnt1: a
-  standalone tmux server survived on borrowed time because of an unrelated
-  second session, then vanished once that session also closed).
+  wrapper died completely — e.g. a tmux server kept alive only by an unrelated
+  second session vanishes once that session closes.
 - A live `claude --resume ... --remote-control` process with **no** tmux
   session around it means someone (or the claude.ai web UI) restarted the
   session directly, bypassing tmux — this happens because the persistent
@@ -248,14 +241,9 @@ discover the duplication on their own and think something's broken.
 
 When the user says "respawn claude rc" (or the pane in `claude-rc` is dead),
 **do not just kill and relaunch blindly.** Killing the live `claude rc`
-process takes down every background worker it spawned too, even ones that
-look fully independent at the OS level — this was hit directly on mnt1: 7
-background `opencode` workers each had their own session ID (`SID == PID`,
-detached from the parent's session), which looked like it should protect
-them from a plain `kill` of the parent. Empirically, most of them still died
-when the parent was killed — the likely cause is their stdout/stderr being
-piped back to the parent for output-streaming, so they got `SIGPIPE`d once
-that pipe's reader vanished, independent of session/process-group semantics.
+process takes down every background worker it spawned too, even ones in their
+own session (`SID == PID`): most die from `SIGPIPE` when the parent's output pipe
+closes, whatever their session or process group.
 
 **Before respawning, always check for live in-flight work:**
 

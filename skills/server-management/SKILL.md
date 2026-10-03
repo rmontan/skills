@@ -43,7 +43,7 @@ metadata:
       connection: ssh tmp1 (from the Mac or mnt1)
       ip: 2.29.62.35
       os: Ubuntu 26.04 LTS
-      role: Temporary server (added 2026-09)
+      role: Temporary server
       user: roberto (passwordless sudo)
       hosting: Hetzner, host firewall is ufw (active)
       management: full, with confirmation for dangerous ops
@@ -109,13 +109,12 @@ srv1 has no agent, on purpose. Systems are defined in
 that file is authoritative (systems missing from it are removed), so add new hosts
 there, not only in the UI. The hub's public key is the `KEY` in each agent's compose file.
 
-## Step 1: Identify the Target Host
+## Before Running Anything
 
-Parse the user's request to a single target: `srv1`, `czap1`, `mnt1`, `sandbox`, `tmp1`, or `nas`.
-If the task requires hopping between hosts (e.g. deploying from mnt1 to srv1),
-identify every hop up front — remember srv1 cannot initiate outbound hops.
+If the task hops between hosts (e.g. deploying from mnt1 to srv1), identify every
+hop up front — srv1 cannot initiate outbound hops.
 
-## Step 2: Check Whether You Are Already On The Target
+### Check whether you are already on the target
 
 **Do not assume the session is running on the Mac.** Claude Code sessions also
 run *on* srv1, czap1, mnt1, sandbox, and tmp1. If you are already on the target host, `ssh
@@ -136,7 +135,7 @@ hostname
 
 - **Already on the target** → run the command **directly**, no `ssh` wrapper:
   `docker ps`, not `ssh mnt1 'docker ps'`.
-- **On the Mac, or on a different host** → use the SSH form in Step 3.
+- **On the Mac, or on a different host** → use the SSH form below.
 
 A quick way to make a command work from either place:
 
@@ -144,7 +143,7 @@ A quick way to make a command work from either place:
 [ "$(hostname)" = "mnt1" ] && docker ps || ssh mnt1 'docker ps'
 ```
 
-## Step 3: Every Remote Command Confirms Its Own Host
+### Every remote command confirms its own host
 
 There is no persistent SSH session across commands — each command you run
 starts a fresh, non-interactive shell, so a bare `ssh <target>` in one
@@ -171,15 +170,6 @@ ssh <target> 'cd /docker/foo && docker compose ps'
 If a task hops across hosts (e.g. mnt1 → srv1), each hop needs its own
 explicit `ssh <hop>` — confirm the hostname at every hop, never by chaining
 off a previous command's connection.
-
-## Step 4: Execute the Task
-
-Apply the server-specific rules below. For dangerous operations, always use
-the confirmation template regardless of which server (srv1, czap1, mnt1, sandbox,
-tmp1 all follow the same rule — production gets no special exemption or extra strictness,
-just the same discipline).
-
----
 
 ## Server-Specific Rules
 
@@ -284,7 +274,7 @@ Outside of `/docker/`, srv1 also uses:
 
 ## Dangerous Operation Confirmation
 
-Applies identically on every Linux host (srv1, czap1, mnt1, sandbox, tmp1) — no server gets a pass.
+Applies identically on every Linux host (srv1, czap1, mnt1, sandbox, tmp1) — no server gets a pass, and production gets no extra strictness either: the same discipline everywhere.
 
 ```
 I'm going to [ACTION] on [SERVER].
@@ -349,7 +339,7 @@ dumping the whole file, and don't echo secret values back into chat or logs.
 ## Error Handling
 
 - `Permission denied (publickey)` when connecting **from** srv1/czap1/mnt1/sandbox/tmp1:
-  first check you aren't self-hopping (`hostname` — see Step 2). If the target
+  first check you aren't self-hopping (`hostname` — see "Check whether you are already on the target"). If the target
   really is another host, the cause is almost always the key choice: those hosts
   keep a passphrase-encrypted copy of the Mac key at `~/.ssh/id_ed25519` that
   cannot be used non-interactively. Host-to-host hops must use the unencrypted
