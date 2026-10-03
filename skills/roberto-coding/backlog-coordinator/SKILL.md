@@ -142,14 +142,9 @@ product should do?** Then it is the owner's, whatever default is attached: surfa
 skip. **Or does it only require applying an already-ratified rule, or reading the code?**
 Then resolve it yourself, and say in your report how you did.
 
-Confirmed in a real project (2026-09-09): an entry left a display-precedence choice open
-with one option recommended, on the reasoning that it shipped today and cost no behaviour
-change. The coordinator "provisionally adopted" it and dispatched. The owner overruled it
-with an argument neither the entry nor the coordinator had — a completed same-account
-merge deletes one of the pair, so the shipping behaviour reports the *input* to a finished
-operation as though it still needs action. The WP was rescored 3/5 → 4/5 and rerouted to
-the top tier. Surfacing and skipping would have cost one run; adopting cost a dispatch and
-a rescope.
+A recommended default records what intake would pick, not what the owner decided: the
+owner can overrule it with an argument neither the entry nor you had, and then adopting it
+has cost a dispatch and a rescope where surfacing and skipping costs one run.
 
 **Scan for file overlap across the `ready` set** before you prioritize: compare each
 entry's `areas:` frontmatter (grep the codebase directly if an entry lacks one or the
@@ -235,12 +230,9 @@ Group the prioritized work into WPs sized for one coding agent each:
   isn't, and the comment is the only move left — which is precisely why the prompt has
   to name the seam-finding escape hatch, or agents will keep choosing prose.
 
-  Observed cost when this rule was absent (contact_sync2, 2026-09): one duplicated
-  predicate accumulated **29 "must never disagree" comments across 8 files and seven
-  near-identical bug REQs in three days**, each fix desynchronising the next — one REQ's
-  title records that it was *caused by* the previous REQ's fix. A compensating
-  calculation in one language silently drifted from the query it compensated for, and
-  nothing detected it, because the binding between them was a sentence. If the profile
+  Without this rule, one duplicated predicate collects "must never disagree" comments
+  and a chain of near-identical bug REQs, each fix desynchronising the next, because the
+  only binding between the copies is a sentence nothing checks. If the profile
   defines a lint for this, a WP may not add an allow-line to make its own work pass —
   same rule as any other baseline: it reports, you decide.
 - A WP usually maps to one REQ, but may bundle tightly-related REQs or split a large
@@ -423,11 +415,8 @@ for anyway:
 
 Then write each follow-up's outcome next to it in the REQ's notes — "done in this WP" or
 `[[REQ-NNNN]]` — before step 10 sets `done`. **A sentence in a closing note is not a filed
-follow-up.** Observed cost when this step did not exist (contact_sync2, 2026-09-29): a
-30-day sweep found ~80 follow-ups sitting in closing notes of `done` REQs, one of them a
-live write-back bug declared in a code comment for 16 days — and every one would have
-cost a fresh worktree, gate and CI round to fix later, where bucket 1 would have cost one
-more agent turn. If the profile defines a check for unlinked follow-ups, it enforces this;
+follow-up.** Follow-ups left in the closing notes of `done` REQs go unfixed, and each
+later costs a fresh worktree, gate and CI round, where bucket 1 costs one more agent turn. If the profile defines a check for unlinked follow-ups, it enforces this;
 a WP may not add an allow row to pass it.
 
 ### 8. Integrate
