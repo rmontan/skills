@@ -79,7 +79,7 @@ ssh <host> "tmux ls 2>&1; ps aux | grep -E 'claude.*remote-control|claude rc' | 
   `--serve`/`--bridge` daemon processes (parented by PID 1) can respawn the
   interactive process on their own, independent of any wrapper you set up.
   If so, this process is likely a direct child of the current SSH session
-  and will die on the next drop — go to **Step 5 (Respawning)** to safely
+  and will die on the next drop — go to **Respawning** (below) to safely
   move it, rather than assuming Step 2's fresh install is safe to run over it.
 
 ### Step 2: Create the launch script

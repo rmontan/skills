@@ -512,9 +512,8 @@ does:
 ### 11. Report
 Summarize: which REQs shipped (with PR links), which were deferred and why, the
 follow-ups triaged per step 7's "Triage every follow-up" (done in the WP, or filed — with
-their new REQ ids), the follow-up REQs filed per step 8's mandatory scan of each agent's own final report
-(with their new REQ ids — this should already be done by the time you write this
-summary, not triggered by the user asking for it), and the final backlog state.
+their new REQ ids; this is already done by the time you write this summary, not
+triggered by the user asking for it), and the final backlog state.
 
 **Report seam findings explicitly, as their own list.** Any place an agent (or you)
 found the same rule implemented twice and left both sites alone per step 4's
