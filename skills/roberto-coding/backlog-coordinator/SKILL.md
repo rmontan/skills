@@ -413,9 +413,20 @@ for anyway:
    would score high-coupling** — file a REQ with the question in it; surface it in the
    report.
 
-Then write each follow-up's outcome next to it in the REQ's notes — "done in this WP" or
-`[[REQ-NNNN]]` — before step 10 sets `done`. **A sentence in a closing note is not a filed
-follow-up.** Follow-ups left in the closing notes of `done` REQs go unfixed, and each
+Then record them in a **`## Follow-ups` section at the end of the REQ** before step 10 sets
+`done`, one bullet per item, each ending in exactly one disposition:
+- `— done in this WP (<file or commit>)`
+- `— [[REQ-NNNN]]` (an entry that exists and covers it)
+- `— declined: <reason>` (an owner ruling, or a reason the owner would accept)
+
+If there were none, the section says `None.` Every `done` REQ carries the section; a
+missing section means nobody looked. Start from the agent's own `## Follow-ups` list (the
+definition of done asks for one), then add what you found in the rest of its report, in
+your own verification, and in the REQ's own notes. An unticked acceptance box is a
+follow-up too: tick it with evidence, or give it a disposition. A live test, deploy,
+backfill or other ops step that has not run is a follow-up, not a closing note.
+**A sentence in a closing note is not a filed follow-up**, and neither is "the
+coordinator owns it": if you are the coordinator, do it now or file it. Follow-ups left in the closing notes of `done` REQs go unfixed, and each
 later costs a fresh worktree, gate and CI round, where bucket 1 costs one more agent turn. If the profile defines a check for unlinked follow-ups, it enforces this;
 a WP may not add an allow row to pass it.
 

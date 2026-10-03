@@ -235,6 +235,14 @@ lighter on low-stakes changes, not a default toward skipping it.
 > 7. State plainly in your final report which of 1–6 applied and what you ran — not
 >    just "tests pass" or "no gaps found." A claim without the command that backs it is
 >    exactly what has gone wrong before.
+> 8. **End your final report with a `## Follow-ups` section**, one bullet per item you
+>    are handing back rather than finishing: seam findings, defects you noticed outside
+>    your files, anything "for the coordinator" (allow/registry rows, baseline updates,
+>    wiring), deferred options, owner questions, acceptance criteria you did not meet,
+>    and live tests, deploys or ops steps that still have to run. One line each, naming
+>    the file. If there are none, write `None.` Anything you mention elsewhere in the
+>    report but leave out of this section counts as not reported. It is the list the
+>    coordinator files from.
 
 ## 3. Verifying a finished WP
 From inside the WP's worktree:
@@ -361,8 +369,10 @@ After merge, for each delivered REQ:
   before the worktree is removed and the report scrolls out of reach.
   File each one as its own `REQ-*.md` (same format as `request-intake`), or state
   plainly in your own report why a given item doesn't need one (already tracked
-  elsewhere, not actually new, etc.). Treat this the same as running `make gate` —
-  part of closing the WP, not an optional courtesy.
+  elsewhere, not actually new, etc.). Record each outcome in the REQ's
+  `## Follow-ups` section (SKILL.md step 7 has the format). A `done` REQ without that
+  section is not closed. Treat this the same as running `make gate` — part of
+  closing the WP, not an optional courtesy.
 
 ### A concurrent request-intake session can be writing to the same backlog
 `request-intake` sessions run independently of the coordinator — a different
