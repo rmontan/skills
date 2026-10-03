@@ -384,12 +384,12 @@ each completed WP (see the playbook for commands):
 If a WP fails verification, re-dispatch with the specific failure as feedback rather
 than hand-fixing silently; note what you did either way.
 
-**Pause before re-dispatching after a failed agent.** If an agent fails to produce
-working code (a no-op, garbage output, or a verification failure), do **not** resubmit
-the WP to another agent — or the same agent again — without **asking the user first**.
-Surface what happened (what the agent produced or didn't, the specific failure) and let
-the user decide whether to re-dispatch, take it over by hand, or stop. Do not silently
-loop the dispatch.
+**Re-dispatching after a failed agent needs no approval.** If an agent fails to produce
+working code (a no-op, garbage output, or a verification failure), resubmit the WP — to
+the same agent or another, at the same tier or a higher one — with the specific failure
+as feedback. Each attempt must change something (the feedback, the agent, or the tier);
+never re-send an identical dispatch. Record every attempt in your report: what failed,
+what you changed, and what it cost.
 
 #### Triage every follow-up before the gate — none may end as prose
 Read each agent's final report (and anything its REQ's notes now say) for follow-ups:
