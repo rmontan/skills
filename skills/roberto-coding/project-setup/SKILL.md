@@ -112,9 +112,7 @@ inside the **sibling `request-intake` skill**.
 > than typing an absolute path — installs rename skills
 > (`roberto-coding__request-intake` under `~/.claude/skills/`,
 > `roberto-coding/request-intake` in the skillshare source), so a hardcoded path goes
-> stale silently. This step previously read
-> `~/.claude/skills/request-intake/assets/…`, which resolves to nothing on a
-> skillshare-managed install. If you can't find the template, **say so rather than
+> stale silently. If you can't find the template, **say so rather than
 > improvising** — the profile's field names are what every other skill reads.
 
 Fill every field from the interview: identity, locations, stack & layout, build/verify
@@ -136,9 +134,8 @@ Create `docs/backlog/BACKLOG.md` from the index-table snippet at the bottom of t
 skill's `assets/request-template.md` (header + empty table).
 
 ### 4b. Write the test profile
-`test-intake` and `test-run` read **`docs/testing/PROJECT.md`**, and `test-run` requires
-it. This skill used to scaffold neither, so a freshly set-up project could not run its
-own test skills until someone hand-wrote the profile — and nothing said that anywhere.
+`test-intake` and `test-run` read **`docs/testing/PROJECT.md`**, and `test-run` stops
+without it, so a new project needs it from the start.
 
 Create `docs/testing/PROJECT.md` from `assets/test-profile-template.md` in the sibling
 **`test-intake`** skill (same resolution caveat as step 4 — find it next to this

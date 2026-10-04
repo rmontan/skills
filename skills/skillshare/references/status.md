@@ -74,7 +74,9 @@ skillshare search <query> -n 10     # Limit results (default: 20)
 
 ## doctor
 
-Diagnose configuration and environment issues. Also checks for sync drift.
+Diagnose configuration and environment issues. Also checks sync drift for skills, agents and extras, plus MCP servers, hooks and plugins (offline; `mcp check --live` and `plugin check` go further).
+
+In global and project mode, each first-level symlink or Windows junction in the skills source gets an info line: discovery does not follow it, so its contents are invisible to skillshare. The check does not follow these links or read their contents. With no such links, it adds no output. In `doctor --json`, each link is an `undeclared_source_links` check with status `info`.
 
 ```bash
 skillshare doctor
@@ -89,6 +91,11 @@ Use `--no-tui` for plain terminal output.
 ## upgrade
 
 Upgrade CLI binary and/or built-in skillshare skill.
+
+The macOS/Linux install script defaults to `~/.local/bin`, so normal updates do not
+need `sudo`. Keep that directory first in PATH; the installer warns if an older
+binary takes precedence. Existing installations stay in place, and updates to a
+protected custom directory can still require `sudo`.
 
 ```bash
 skillshare upgrade              # Both CLI + skill

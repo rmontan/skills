@@ -76,8 +76,10 @@ Use the profile's `<dispatch>` mode (or the tier-selected one):
   the worktree, for example:
   ```bash
   cd .worktrees/<wp>
-  XDG_DATA_HOME="<isolated-data-dir-from-below>" opencode run "<work-package prompt>" -m <model> --dangerously-skip-permissions
+  XDG_DATA_HOME="<isolated-data-dir-from-below>" opencode run "<work-package prompt>" -m <model> --auto
   ```
+  An unrecognised flag makes `opencode run` print its help and exit 0 — a silent no-op
+  dispatch — so check `opencode run --help` when the CLI updates.
   **Name the WP's scratch files for the WP, with these exact paths** — the prompt you
   dispatched and the transcript you captured:
   ```
@@ -86,9 +88,7 @@ Use the profile's `<dispatch>` mode (or the tier-selected one):
   ```
   Any other name is a leak: §7's teardown deletes these two paths and nothing else, so
   a file called `<wp>-prompt.md`, or one parked in a `.worktrees/.prompts/` bucket,
-  survives every subsequent wave. Audited 2026-09-15: `.worktrees/` held 30 orphaned
-  logs and prompts going back to REQ-0371 in three different naming styles, plus
-  313 MB of stale `.opencode-data` — all for REQs long since `done`.
+  survives every subsequent wave and accumulates for REQs long since `done`.
 - **Claude subagents** — launch the `Agent` tool (general-purpose) with the
   work-package prompt; have it commit locally in the worktree. **Do not pass
   `isolation: "worktree"` (or `"remote"`) on this call.** That parameter creates a
@@ -96,11 +96,8 @@ Use the profile's `<dispatch>` mode (or the tier-selected one):
   `worktree-agent-<id>`) and silently confines the agent's git/filesystem access to
   it — the WP prompt's instruction to `cd` into `.worktrees/<wp>` and commit on
   `wp-<wp>` then can't actually be followed, because step 1's worktree already
-  provides the isolation this mode needs. Observed twice in one dispatch wave
-  (2026-08-23): both agents committed real, correct work onto the auto-created
-  branch instead of the assigned one, and one also produced a confusing early stub
-  response before a real final report followed on the same task-id — plausibly the
-  same conflict, not a separate bug. Leave `isolation` unset; if it happens anyway,
+  provides the isolation this mode needs. The agent then commits correct work onto the
+  auto-created branch instead of the assigned one. Leave `isolation` unset; if it happens anyway,
   recover with `git diff <base>..<agent-commit>` / `git cherry-pick` onto the
   correct WP branch, then re-run the full verification in §3 yourself before
   trusting it — don't take the agent's own gate/test claims for a worktree it
@@ -143,7 +140,7 @@ mkdir -p "$OC_DATA/opencode"
 cp ~/.local/share/opencode/auth.json ~/.local/share/opencode/account.json "$OC_DATA/opencode/"
 
 cd .worktrees/<wp>
-XDG_DATA_HOME="$OC_DATA" opencode run "<work-package prompt>" -m <model> --dangerously-skip-permissions
+XDG_DATA_HOME="$OC_DATA" opencode run "<work-package prompt>" -m <model> --auto
 ```
 `.worktrees/.opencode-data/<wp>` is a sibling of the WP worktrees, so it's covered by
 the same `.worktrees/` gitignore/exclude entry from step 1 and needs no separate
@@ -160,19 +157,10 @@ letting a batch finish (or fail cleanly) before starting the next, unless the pr
 specifies a different limit. Serialize anything sharing files or the single
 schema-migration slot regardless of batch size.
 
-### Parallel gates and `/tmp` (no longer a per-prompt concern)
-On mnt1, concurrent `make gate` runs used to fail at the Go **link** step (and in
-`check-prose-invariants` and other shell checks) with `disk quota exceeded` — `/tmp` is a
-small quota-mounted tmpfs that several concurrent link/build phases could collectively
-exhaust. This is now fixed at the **host** level, not the prompt level: `GOTMPDIR` and
-`TMPDIR` point at `~/.cache/gotmp` / `~/.cache/tmpdir` (on `/`, which has ~130G free) via
-`~/.bashrc` (exported before the interactive-shell guard, so non-interactive dispatch
-shells get it too), the systemd `--user` manager's environment (so every process it
-spawns inherits it, same mechanism as `ARCTL_API_BASE_URL`), `~/.config/environment.d/
-gotmp.conf`, and `go env -w GOTMPDIR=...` for the Go toolchain directly. **Don't add an
-export for this to a WP prompt** — every dispatched process already inherits it. If a
-gate run still hits `disk quota exceeded` on `/tmp`, that's a regression in the host
-default, not something to work around per-dispatch.
+### Parallel gates and `/tmp`
+Temp-directory placement (`TMPDIR`, `GOTMPDIR`) is the host's environment, not the WP
+prompt's: don't add exports for it to a dispatch. A gate that hits `disk quota exceeded`
+on `/tmp` is a host problem to report, not to work around per dispatch.
 
 ### Definition of done — paste into every WP prompt verbatim
 
@@ -238,7 +226,7 @@ lighter on low-stakes changes, not a default toward skipping it.
 >
 >    **Whether you can also *run* it depends on the project.** Check the profile: some
 >    withhold live credentials from dispatched agents deliberately (a secret in reach
->    of `--dangerously-skip-permissions` and a written report is how one leaks), others
+>    of an auto-approving agent and a written report is how one leaks), others
 >    grant them — e.g. because the credential only reaches disposable test data. If the
 >    profile gives you credentials and a way to run a single live test, **run yours and
 >    report what it showed.** If it doesn't, write the test anyway and say plainly in
@@ -247,6 +235,14 @@ lighter on low-stakes changes, not a default toward skipping it.
 > 7. State plainly in your final report which of 1–6 applied and what you ran — not
 >    just "tests pass" or "no gaps found." A claim without the command that backs it is
 >    exactly what has gone wrong before.
+> 8. **End your final report with a `## Follow-ups` section**, one bullet per item you
+>    are handing back rather than finishing: seam findings, defects you noticed outside
+>    your files, anything "for the coordinator" (allow/registry rows, baseline updates,
+>    wiring), deferred options, owner questions, acceptance criteria you did not meet,
+>    and live tests, deploys or ops steps that still have to run. One line each, naming
+>    the file. If there are none, write `None.` Anything you mention elsewhere in the
+>    report but leave out of this section counts as not reported. It is the list the
+>    coordinator files from.
 
 ## 3. Verifying a finished WP
 From inside the WP's worktree:
@@ -324,9 +320,7 @@ gh pr checks --watch                               # wait for the profile's CI w
 - **Remove the worktree before merging, not after.** `git branch -d`/`-D` and
   `gh pr merge --delete-branch` both refuse to delete a branch that's still checked
   out in a worktree — silently, from the coordinator's perspective, since the PR
-  still shows as merged. Observed at scale (2026-09-03): a repo audited after months
-  of coordinator waves had accumulated **~250 dead branches**, nearly all already
-  merged, because this step ran in the wrong order every time. Do it in this order:
+  still shows as merged, so dead branches pile up wave after wave. Do it in this order:
 ```bash
 git worktree remove .worktrees/<wp>
 rm -rf .worktrees/<wp>.log .worktrees/<wp>.prompt.md .worktrees/.opencode-data/<wp>
@@ -375,8 +369,10 @@ After merge, for each delivered REQ:
   before the worktree is removed and the report scrolls out of reach.
   File each one as its own `REQ-*.md` (same format as `request-intake`), or state
   plainly in your own report why a given item doesn't need one (already tracked
-  elsewhere, not actually new, etc.). Treat this the same as running `make gate` —
-  part of closing the WP, not an optional courtesy.
+  elsewhere, not actually new, etc.). Record each outcome in the REQ's
+  `## Follow-ups` section (SKILL.md step 7 has the format). A `done` REQ without that
+  section is not closed. Treat this the same as running `make gate` — part of
+  closing the WP, not an optional courtesy.
 
 ### A concurrent request-intake session can be writing to the same backlog
 `request-intake` sessions run independently of the coordinator — a different

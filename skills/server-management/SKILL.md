@@ -2,13 +2,13 @@
 name: server-management
 description: |
   Use when managing srv1 (production), czap1 (contactzapp production), mnt1 (personal server), sandbox (test server),
-  tmp1 (temporary Hetzner server), or nas (TrueNAS Scale) — SSH connections, Docker containers, package updates,
+  tmp1 (temporary Hetzner server, being shut down), or nas (TrueNAS Scale) — SSH connections, Docker containers, package updates,
   code deployment, log analysis, or checking service/firewall status on the home lab.
   Access via `ssh srv1`, `ssh czap1`, `ssh mnt1`, `ssh sandbox`, `ssh tmp1`, `ssh nas`. All Linux hosts have a
   passwordless-sudo `roberto` user; nas is GUI-managed only, no CLI Docker/app changes.
 license: MIT
 metadata:
-  version: "2.2.0"
+  version: "2.4.0"
   category: infrastructure
   servers:
     srv1:
@@ -34,7 +34,7 @@ metadata:
       connection: ssh sandbox
       ip: 10.10.10.233
       os: Ubuntu Linux
-      role: Test server
+      role: Test server + monitoring box (Beszel hub, Uptime Kuma, Healthchecks, ntfy)
       user: roberto (passwordless sudo)
       hosting: VM on nas
       management: full, with confirmation for dangerous ops
@@ -43,10 +43,19 @@ metadata:
       connection: ssh tmp1 (from the Mac or mnt1)
       ip: 2.29.62.35
       os: Ubuntu 26.04 LTS
-      role: Temporary server (added 2026-09)
+      role: Temporary server — being shut down soon; don't deploy anything new there
       user: roberto (passwordless sudo)
       hosting: Hetzner, host firewall is ufw (active)
       management: full, with confirmation for dangerous ops
+    czap1:
+      alias: czap1
+      connection: ssh czap1 (from the Mac or mnt1)
+      ip: 2.31.19.232
+      os: Ubuntu Linux
+      role: Production server for contactzapp (app.contactz.app), being set up
+      user: roberto (passwordless sudo)
+      hosting: Hetzner, behind a Hetzner firewall (80/443 public, all ports from home); no host firewall
+      management: over SSH only — no Claude Code, opencode or skillshare on the host, by design
     nas:
       alias: nas
       connection: ssh nas
@@ -80,7 +89,7 @@ along the paths listed under Network Topology.
    mnt1 ↔ sandbox ↔ srv1 (mesh; srv1 accepts inbound only)
 ```
 
-- **Mac → all four**: full SSH access, passwordless. This is the starting point for everything.
+- **Mac → every host** (srv1, czap1, mnt1, sandbox, tmp1, nas): full SSH access, passwordless. This is the starting point for everything.
 - **mnt1 ↔ sandbox**: can SSH to each other.
 - **mnt1 → srv1** and **sandbox → srv1**: can SSH in.
 - **srv1 → anything**: cannot initiate SSH out to mnt1, sandbox, or nas. srv1 is a one-way-in leaf node.
@@ -91,34 +100,73 @@ along the paths listed under Network Topology.
 - **czap1** (2.31.19.232): production server for **contactzapp** (public site `app.contactz.app`).
   Reachable from the **Mac** (`ssh czap1`) and from **mnt1** (`ssh czap1`, h2h key). `roberto`
   user with passwordless sudo. Treat as a leaf like srv1: it has no SSH keys to reach
-  anything else. It is production, so apply the same confirmation discipline.
-- **tmp1** (2.29.62.35): temporary Hetzner server, not shown in the diagram. Reachable
+  anything else. It is production, so apply the same confirmation discipline. It sits behind a **Hetzner
+  firewall**: only 80/443 from the internet, everything from the home network; the host
+  itself has no firewall (ufw inactive). It is
+  managed over SSH only, by design: no Claude Code, opencode or skillshare runs on it,
+  and none should be installed.
+- **tmp1** (2.29.62.35): temporary Hetzner server, being shut down soon, not shown in the diagram. Reachable
   from the **Mac** and from **mnt1** (`ssh tmp1`); sandbox has no alias for it, and tmp1
   has no SSH config/keys to reach anything else (treat it as a leaf, like srv1). Its
   firewall is **ufw** on the host: OpenSSH from anywhere, plus specific ports from the
   home NAT IP only (81.56.206.190). Services publish via `network_mode: host`, not
   Docker port mappings, because Docker-published ports bypass ufw.
 
-## Monitoring (Beszel)
+## Monitoring (sandbox is the monitoring box)
 
-Central Beszel hub on **sandbox**: `/docker/beszel/`, UI at http://10.10.10.233:8090.
-Agents: sandbox (same compose, via unix socket), mnt1 `/docker/beszel-agent/`
-(:45876), tmp1 `/docker/beszel/` (agent-only, :45876, ufw-allowed from home NAT IP).
-srv1 has no agent, on purpose. Systems are defined in
-`/docker/beszel/data/beszel_data/config.yml` on sandbox and synced on hub restart —
-that file is authoritative (systems missing from it are removed), so add new hosts
-there, not only in the UI. The hub's public key is the `KEY` in each agent's compose file.
+Everything below runs on **sandbox**; production is watched from there. Alerts go to
+**ntfy** (topic `alerts`) → the ntfy phone/web app. Tools publish to ntfy over the LAN
+(`http://10.10.10.233:2586`, publisher token), never via the public hostname, so alerting
+does not depend on DNS/NPM. Email alerting is not working (SMTP credentials rejected).
 
-## Step 1: Identify the Target Host
+| Service | Path on sandbox | URL | Credentials |
+|---|---|---|---|
+| Beszel hub | `/docker/beszel/` | http://10.10.10.233:8090 | owner |
+| Uptime Kuma (v2, SQLite) | `/docker/uptime-kuma/` | http://10.10.10.233:3001 | owner |
+| Healthchecks (SQLite) | `/docker/healthchecks/` | http://10.10.10.233:8000 | login `admin@contactz.app`, password in `admin.credentials` (600); secrets in `.env` (600) |
+| ntfy | `/docker/ntfy/` | https://ntfy.contactz.app (NPM) · LAN :2586 | `credentials` (600): publisher token, read-only `probe` user; `admin` password is owner-held, not stored |
 
-Parse the user's request to a single target: `srv1`, `czap1`, `mnt1`, `sandbox`, `tmp1`, or `nas`.
-If the task requires hopping between hosts (e.g. deploying from mnt1 to srv1),
-identify every hop up front — remember srv1 cannot initiate outbound hops.
+- **ntfy** is `auth-default-access: deny-all`, signup off, web push on, iOS relay via
+  `upstream-base-url: https://ntfy.sh` (message text stays local). The NPM proxy host
+  needs **no Advanced config** — ntfy sends `X-Accel-Buffering: no` and a 45 s
+  keepalive; a pasted nginx snippet (`proxy_http_version`, buffering, timeouts) took the
+  host Offline. Force SSL is on.
+- **Healthchecks** is at `https://hc.contactz.app` (NPM): only `/ping` is public; every
+  other path has a custom location `/` with access list `local` (allows `10.10.10.0/24` and
+  `192.168.1.254` — LAN clients reach NPM through the outer router as .254; internet clients
+  keep their real IP). `SITE_ROOT=https://hc.contactz.app`. `INTEGRATIONS_ALLOW_PRIVATE_IPS`
+  is on so it can reach ntfy on the LAN. Admin via `docker compose exec healthchecks
+  ./manage.py …` (its `createsuperuser` takes `--email/--password`, not `--noinput`).
+- **Cron jobs report through `/usr/local/bin/hc-run <uuid> <logfile> <cmd…>`**: pings
+  `/start`, runs the job appending to the log, then pings the exit code with the last 40 log
+  lines; curl failures never affect the job. The one source is this skill's `scripts/hc-run` —
+  install it with `sudo install -o root -g root -m 755 <skill>/scripts/hc-run
+  /usr/local/bin/hc-run` (czap1 has no skillshare: copy it over ssh), never hand-edit a host
+  copy. Wired: czap1 pgbackrest full/diff (roberto crontab) and restic
+  (`/etc/cron.d/czap1-restic`); mnt1's six roberto cron jobs. A new check is created in the
+  Healthchecks UI or `manage.py shell` (cron schedule, tz, grace) and its UUID goes in the
+  cron line. Healthchecks' check descriptions say in plain English what each job does.
+- **Beszel agents**: sandbox (same compose, unix socket), mnt1 `/docker/beszel-agent/`
+  (:45876), czap1 `/docker/beszel-agent/` (:45876, reachable from home only via the
+  Hetzner firewall), tmp1 `/docker/beszel/` (agent-only, ufw-allowed from home NAT IP).
+  srv1 has no agent, on purpose. Systems are defined in
+  `/docker/beszel/data/beszel_data/config.yml` on sandbox (owned 1001:110 — append with
+  `sudo tee -a`) and synced on hub restart — that file is authoritative (systems missing
+  from it are removed), so add new hosts there, not only in the UI. The hub's public key
+  is the `KEY` in each agent's compose file.
+- **Nothing watches sandbox itself** unless an external dead-man check exists — if it
+  dies, every monitor and the notifier die with it.
+- Sandbox's watchtower has no label filter: these `:latest`/`:2` images auto-update daily.
 
-## Step 2: Check Whether You Are Already On The Target
+## Before Running Anything
+
+If the task hops between hosts (e.g. deploying from mnt1 to srv1), identify every
+hop up front — srv1 cannot initiate outbound hops.
+
+### Check whether you are already on the target
 
 **Do not assume the session is running on the Mac.** Claude Code sessions also
-run *on* srv1, mnt1, and sandbox. If you are already on the target host, `ssh
+run *on* srv1, mnt1, and sandbox (never on czap1 or tmp1). If you are already on the target host, `ssh
 <target> '...'` is a pointless self-hop — and it will usually fail, because the
 `~/.ssh/id_ed25519` on those hosts is passphrase-encrypted and no ssh-agent is
 available in a non-interactive session. The error looks like an access problem
@@ -136,7 +184,7 @@ hostname
 
 - **Already on the target** → run the command **directly**, no `ssh` wrapper:
   `docker ps`, not `ssh mnt1 'docker ps'`.
-- **On the Mac, or on a different host** → use the SSH form in Step 3.
+- **On the Mac, or on a different host** → use the SSH form below.
 
 A quick way to make a command work from either place:
 
@@ -144,7 +192,7 @@ A quick way to make a command work from either place:
 [ "$(hostname)" = "mnt1" ] && docker ps || ssh mnt1 'docker ps'
 ```
 
-## Step 3: Every Remote Command Confirms Its Own Host
+### Every remote command confirms its own host
 
 There is no persistent SSH session across commands — each command you run
 starts a fresh, non-interactive shell, so a bare `ssh <target>` in one
@@ -171,15 +219,6 @@ ssh <target> 'cd /docker/foo && docker compose ps'
 If a task hops across hosts (e.g. mnt1 → srv1), each hop needs its own
 explicit `ssh <hop>` — confirm the hostname at every hop, never by chaining
 off a previous command's connection.
-
-## Step 4: Execute the Task
-
-Apply the server-specific rules below. For dangerous operations, always use
-the confirmation template regardless of which server (srv1, mnt1, sandbox all
-follow the same rule — production gets no special exemption or extra strictness,
-just the same discipline).
-
----
 
 ## Server-Specific Rules
 
@@ -222,13 +261,18 @@ through the web UI, and offer to check current status via CLI instead.
 **srv1-specific:** confirm you're not trying to hop *from* srv1 to another
 host — it can't, and the attempt will just hang until timeout.
 
-**tmp1-specific:** it's a temporary box, so there's no skillshare, no
+**czap1-specific:** production, being set up, and managed only by SSH from the Mac or
+mnt1. It follows the Docker Convention. There is no skillshare, Claude Code, opencode or
+`~/.config/server/credentials.env` there, and that is deliberate.
+
+**tmp1-specific:** it's a temporary box being shut down soon — don't deploy new
+services there. There's no skillshare, no
 `~/.config/server/credentials.env`, and no uid-1001 `docker` account (see Docker
 Convention). Firewall changes there mean `ufw`, and still need confirmation.
 
 ---
 
-## Docker Convention (srv1, mnt1, sandbox, tmp1)
+## Docker Convention (srv1, czap1, mnt1, sandbox; not tmp1)
 
 Every container lives under **`/docker/<container-name>/`**, and every volume
 that container mounts must be a subdirectory of that same folder. No
@@ -247,10 +291,10 @@ exceptions — don't mount volumes elsewhere on the filesystem.
 - Manage with `docker compose` from inside `/docker/<container-name>/` (`ps`, `logs -f`, `restart`, `down`).
 
 **User/group:** containers run as `1001:110`, not root — set `user: "1001:110"` at
-the service level in every `docker-compose.yml`. All three hosts have a uid-1001
+the service level in every `docker-compose.yml`. Every host it covers has a uid-1001
 account (named `docker`) and a gid-110 group backing this (named `docker` on srv1,
 `docker-user` on mnt1/sandbox — the group *name* varies but the GID is always 110).
-`roberto` is a member of that gid-110 group on all three, plus each host's actual
+`roberto` is a member of that gid-110 group on each of those hosts, plus each host's actual
 Docker daemon-socket group, so it can both administer containers (`docker ps`,
 `compose up`, etc.) and own/read/write the `1001:110` bind-mounted data without sudo.
 Before assuming this is set up on a *new* host, verify with `id docker`.
@@ -284,7 +328,7 @@ Outside of `/docker/`, srv1 also uses:
 
 ## Dangerous Operation Confirmation
 
-Applies identically on srv1, mnt1, and sandbox — no server gets a pass.
+Applies identically on every Linux host (srv1, czap1, mnt1, sandbox, tmp1) — no server gets a pass, and production gets no extra strictness either: the same discipline everywhere.
 
 ```
 I'm going to [ACTION] on [SERVER].
@@ -314,7 +358,8 @@ srv1, mnt1, and sandbox each have `skillshare` installed with `~/.config/skillsh
 cloned from `git@github.com:rmontan/skills.git` (global mode, `git_root: root`) — this
 is the same repo the Mac's `~/.config/skillshare` syncs from. Skills land symlinked
 into `~/.claude/skills`, `~/.gemini/skills`, and `~/.config/opencode/skills` on all
-three servers (Claude, agy/antigravity, and opencode are used on all of them).
+three (Claude, agy/antigravity, and opencode are used on all of them). czap1 and tmp1
+have no skillshare, deliberately.
 
 **"Sync skills to all servers" / "update skills on srv1/mnt1/sandbox" means:**
 ```bash
@@ -347,13 +392,13 @@ dumping the whole file, and don't echo secret values back into chat or logs.
 ## Error Handling
 
 - `Permission denied (publickey)` when connecting **from** srv1/mnt1/sandbox:
-  first check you aren't self-hopping (`hostname` — see Step 2). If the target
+  first check you aren't self-hopping (`hostname` — see "Check whether you are already on the target"). If the target
   really is another host, the cause is almost always the key choice: those hosts
   keep a passphrase-encrypted copy of the Mac key at `~/.ssh/id_ed25519` that
   cannot be used non-interactively. Host-to-host hops must use the unencrypted
   `~/.ssh/id_ed25519_h2h` key, set per-host in `~/.ssh/config` with
   `IdentityFile ~/.ssh/id_ed25519_h2h` + `IdentitiesOnly yes`.
-- SSH fails otherwise: verify alias (`srv1`/`mnt1`/`sandbox`/`nas`), check
+- SSH fails otherwise: verify alias (`srv1`/`czap1`/`mnt1`/`sandbox`/`tmp1`/`nas`), check
   `ssh-add -l`, and remember srv1 can only be reached directly, never via a
   mnt1/sandbox hop.
 - Command fails: show the error, explain the likely cause, suggest a fix,

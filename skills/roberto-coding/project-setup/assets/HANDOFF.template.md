@@ -47,7 +47,7 @@ Work packages are dispatched per `docs/backlog/PROJECT.md` (dispatch mode + mode
 Default pattern (opencode):
 ```bash
 # run from inside the WP's worktree; agent commits locally (does NOT push/PR).
-opencode run "<work-package prompt>" -m <model> --dangerously-skip-permissions
+opencode run "<work-package prompt>" -m <model> --auto
 ```
 The coordinator verifies (green gate + trial merge), wires the composition roots,
 integration-tests, then follows the delivery policy in PROJECT.md.

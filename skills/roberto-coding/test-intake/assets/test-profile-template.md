@@ -20,9 +20,9 @@ details that already live there.
 
 ## Test fixtures / throwaway accounts
 <Which accounts, users, or datasets are safe to read/write/reset for testing purposes,
-and how to reset them. e.g. "tvcasaetna@gmail.com (Google) + cs_test999@outlook.com
-(Microsoft), linked under app user <uuid>. Synthetic data only — freely modifiable,
-deletable, and reimportable via scripts/synth-accounts.sh (see docs/E2E_TESTING.md).
+and how to reset them. e.g. "<throwaway account A> (<provider>) + <throwaway account B>
+(<provider>), linked under app user <id>. Synthetic data only — freely modifiable,
+deletable, and reimportable via <reset script>.
 Never point a check at a real user's account or data.">
 
 ## Evidence capture for AI-graded checks

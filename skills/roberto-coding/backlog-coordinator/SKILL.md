@@ -142,14 +142,9 @@ product should do?** Then it is the owner's, whatever default is attached: surfa
 skip. **Or does it only require applying an already-ratified rule, or reading the code?**
 Then resolve it yourself, and say in your report how you did.
 
-Confirmed in a real project (2026-09-09): an entry left a display-precedence choice open
-with one option recommended, on the reasoning that it shipped today and cost no behaviour
-change. The coordinator "provisionally adopted" it and dispatched. The owner overruled it
-with an argument neither the entry nor the coordinator had — a completed same-account
-merge deletes one of the pair, so the shipping behaviour reports the *input* to a finished
-operation as though it still needs action. The WP was rescored 3/5 → 4/5 and rerouted to
-the top tier. Surfacing and skipping would have cost one run; adopting cost a dispatch and
-a rescope.
+A recommended default records what intake would pick, not what the owner decided: the
+owner can overrule it with an argument neither the entry nor you had, and then adopting it
+has cost a dispatch and a rescope where surfacing and skipping costs one run.
 
 **Scan for file overlap across the `ready` set** before you prioritize: compare each
 entry's `areas:` frontmatter (grep the codebase directly if an entry lacks one or the
@@ -235,12 +230,9 @@ Group the prioritized work into WPs sized for one coding agent each:
   isn't, and the comment is the only move left — which is precisely why the prompt has
   to name the seam-finding escape hatch, or agents will keep choosing prose.
 
-  Observed cost when this rule was absent (contact_sync2, 2026-09): one duplicated
-  predicate accumulated **29 "must never disagree" comments across 8 files and seven
-  near-identical bug REQs in three days**, each fix desynchronising the next — one REQ's
-  title records that it was *caused by* the previous REQ's fix. A compensating
-  calculation in one language silently drifted from the query it compensated for, and
-  nothing detected it, because the binding between them was a sentence. If the profile
+  Without this rule, one duplicated predicate collects "must never disagree" comments
+  and a chain of near-identical bug REQs, each fix desynchronising the next, because the
+  only binding between the copies is a sentence nothing checks. If the profile
   defines a lint for this, a WP may not add an allow-line to make its own work pass —
   same rule as any other baseline: it reports, you decide.
 - A WP usually maps to one REQ, but may bundle tightly-related REQs or split a large
@@ -392,12 +384,12 @@ each completed WP (see the playbook for commands):
 If a WP fails verification, re-dispatch with the specific failure as feedback rather
 than hand-fixing silently; note what you did either way.
 
-**Pause before re-dispatching after a failed agent.** If an agent fails to produce
-working code (a no-op, garbage output, or a verification failure), do **not** resubmit
-the WP to another agent — or the same agent again — without **asking the user first**.
-Surface what happened (what the agent produced or didn't, the specific failure) and let
-the user decide whether to re-dispatch, take it over by hand, or stop. Do not silently
-loop the dispatch.
+**Re-dispatching after a failed agent needs no approval.** If an agent fails to produce
+working code (a no-op, garbage output, or a verification failure), resubmit the WP — to
+the same agent or another, at the same tier or a higher one — with the specific failure
+as feedback. Each attempt must change something (the feedback, the agent, or the tier);
+never re-send an identical dispatch. Record every attempt in your report: what failed,
+what you changed, and what it cost.
 
 #### Triage every follow-up before the gate — none may end as prose
 Read each agent's final report (and anything its REQ's notes now say) for follow-ups:
@@ -406,28 +398,42 @@ noticed, dead code it left. Sort **every one** into exactly one bucket **now, be
 step 9's integration gate**, so a tidy-up rides the gate and CI run you are about to pay
 for anyway:
 
-1. **Small, and inside the files this WP already owns** — a stale comment, a dead helper,
-   a duplicate within its own files, a test-helper fix, a missing test for code it wrote.
+1. **Small, and in files this WP owns or that no in-flight WP owns** — a stale comment,
+   a dead helper, a duplicate, a test-helper fix, a missing test for code it wrote.
    **Resume the same agent** (e.g. `SendMessage` to its id — not a fresh dispatch; it
    still holds the context) with the items as an explicit extra task and the same
    definition-of-done, then re-verify the WP. This is not the failed-agent re-dispatch
-   above and needs no user approval: the WP succeeded, it is being asked to finish its
-   own area.
-2. **Small, but in files the WP does not own** — file a REQ **now** (request-intake,
-   structured-brief mode), naming the file, and note it as a bundling candidate so step 4
-   rides it on the next WP that touches that file. Do not widen this WP: disjoint
-   ownership is what keeps parallel agents from colliding.
+   above and needs no user approval: the WP succeeded, it is being asked to finish what
+   it found. Before resuming onto a file the WP did not own, check that no in-flight WP
+   owns it and no `in-progress` REQ lists it, that it is not a composition root or a
+   data-loss/security path the profile names, and that the fix is within the tier the
+   agent ran on (you judge that against step 5's scoring, not the agent). The file then
+   joins this WP's set, so the next dispatch sees it as taken. The agent never widens
+   its own scope; it reports, you decide.
+2. **Small, but in files another in-flight WP owns** (or failing a check above) — first
+   look for a `ready`, undispatched REQ whose areas cover the same file and add the item
+   there as an acceptance box; otherwise file a REQ **now** (request-intake,
+   structured-brief mode), naming the file, as a bundling candidate so step 4 rides it on
+   the next WP that touches that file. One REQ per file cluster, not one per finding.
 3. **Needs an owner decision, touches a data-loss/security path the profile names, or
    would score high-coupling** — file a REQ with the question in it; surface it in the
    report.
 
-Then write each follow-up's outcome next to it in the REQ's notes — "done in this WP" or
-`[[REQ-NNNN]]` — before step 10 sets `done`. **A sentence in a closing note is not a filed
-follow-up.** Observed cost when this step did not exist (contact_sync2, 2026-09-29): a
-30-day sweep found ~80 follow-ups sitting in closing notes of `done` REQs, one of them a
-live write-back bug declared in a code comment for 16 days — and every one would have
-cost a fresh worktree, gate and CI round to fix later, where bucket 1 would have cost one
-more agent turn. If the profile defines a check for unlinked follow-ups, it enforces this;
+Then record them in a **`## Follow-ups` section at the end of the REQ** before step 10 sets
+`done`, one bullet per item, each ending in exactly one disposition:
+- `— done in this WP (<file or commit>)`
+- `— [[REQ-NNNN]]` (an entry that exists and covers it)
+- `— declined: <reason>` (an owner ruling, or a reason the owner would accept)
+
+If there were none, the section says `None.` Every `done` REQ carries the section; a
+missing section means nobody looked. Start from the agent's own `## Follow-ups` list (the
+definition of done asks for one), then add what you found in the rest of its report, in
+your own verification, and in the REQ's own notes. An unticked acceptance box is a
+follow-up too: tick it with evidence, or give it a disposition. A live test, deploy,
+backfill or other ops step that has not run is a follow-up, not a closing note.
+**A sentence in a closing note is not a filed follow-up**, and neither is "the
+coordinator owns it": if you are the coordinator, do it now or file it. Follow-ups left in the closing notes of `done` REQs go unfixed, and each
+later costs a fresh worktree, gate and CI round, where bucket 1 costs one more agent turn. If the profile defines a check for unlinked follow-ups, it enforces this;
 a WP may not add an allow row to pass it.
 
 ### 8. Integrate
@@ -512,9 +518,8 @@ does:
 ### 11. Report
 Summarize: which REQs shipped (with PR links), which were deferred and why, the
 follow-ups triaged per step 7's "Triage every follow-up" (done in the WP, or filed — with
-their new REQ ids), the follow-up REQs filed per step 8's mandatory scan of each agent's own final report
-(with their new REQ ids — this should already be done by the time you write this
-summary, not triggered by the user asking for it), and the final backlog state.
+their new REQ ids; this is already done by the time you write this summary, not
+triggered by the user asking for it), and the final backlog state.
 
 **Report seam findings explicitly, as their own list.** Any place an agent (or you)
 found the same rule implemented twice and left both sites alone per step 4's

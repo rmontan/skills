@@ -23,12 +23,6 @@ remote Linux server, wrapped so it survives SSH drops, its own crashes, and
 full reboots. Also covers how to respawn it safely later, since a naive
 kill-and-restart can silently interrupt in-flight background work.
 
-This was built from hands-on experience standing up `claude rc` on `mnt1`
-for the `contact_sync2` project — including the failure modes actually hit
-(tmux server dying with the last session, a live-migration attempt via
-`reptyr` that's blocked by design, and background workers dying on restart
-even though they looked independent).
-
 ## When to Use
 
 Use this skill when the user:
@@ -42,7 +36,7 @@ Do NOT use this skill for:
 - Setting up Claude Code itself (assumes `claude` CLI is already installed,
   in `$PATH`, and authenticated on the target host)
 - General SSH/server conventions unrelated to `claude rc` — if the target is
-  one of the home-lab hosts (srv1/mnt1/sandbox/nas), the **server-management**
+  one of the home-lab hosts (srv1/czap1/mnt1/sandbox/tmp1/nas), the **server-management**
   skill covers connection aliases, sudo conventions, and dangerous-operation
   confirmation rules; use both together
 
@@ -66,20 +60,22 @@ ssh <host> "claude --version && which claude"
 Never assume a clean slate — a previous attempt may be half-alive.
 
 ```bash
-ssh <host> "tmux ls 2>&1; ps aux | grep -E 'claude.*remote-control|claude rc' | grep -v grep"
+ssh <host> "tmux -L claude-rc ls 2>&1; tmux ls 2>&1; ps aux | grep -E 'claude.*remote-control|claude rc' | grep -v grep"
 ```
 
+- Check both the project's socket (`-L claude-rc`) and the default one: a bare
+  `tmux ls` only sees the default socket, so a wrapper on a dedicated socket looks
+  absent to it.
 - `tmux ls` failing with `no server running on ...` means any prior tmux
-  wrapper died completely (this is the actual failure mode hit on mnt1: a
-  standalone tmux server survived on borrowed time because of an unrelated
-  second session, then vanished once that session also closed).
+  wrapper died completely — e.g. a tmux server kept alive only by an unrelated
+  second session vanishes once that session closes.
 - A live `claude --resume ... --remote-control` process with **no** tmux
   session around it means someone (or the claude.ai web UI) restarted the
   session directly, bypassing tmux — this happens because the persistent
   `--serve`/`--bridge` daemon processes (parented by PID 1) can respawn the
   interactive process on their own, independent of any wrapper you set up.
   If so, this process is likely a direct child of the current SSH session
-  and will die on the next drop — go to **Step 5 (Respawning)** to safely
+  and will die on the next drop — go to **Respawning** (below) to safely
   move it, rather than assuming Step 2's fresh install is safe to run over it.
 
 ### Step 2: Create the launch script
@@ -107,14 +103,18 @@ ssh <host> "cat > ~/start_claude_rc_tmux.sh << 'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-if tmux has-session -t claude-rc 2>/dev/null; then
-  echo \"claude-rc tmux session already running\"
+SOCK=claude-rc   # one tmux socket per project, e.g. claude-rc-<project>
+NAME=claude-rc
+
+# '=' makes the match exact: without it, -t claude-rc also matches claude-rc-web
+if tmux -L \"\$SOCK\" has-session -t \"=\$NAME\" 2>/dev/null; then
+  echo \"\$NAME tmux session already running\"
   exit 0
 fi
 
-tmux new-session -d -s claude-rc -c <PROJECT_DIR>
-tmux set-option -t claude-rc remain-on-exit on
-tmux send-keys -t claude-rc \"~/launch_claude_rc.sh\" Enter
+tmux -L \"\$SOCK\" new-session -d -s \"\$NAME\" -c <PROJECT_DIR>
+tmux -L \"\$SOCK\" set-option -t \"\$NAME\" remain-on-exit on
+tmux -L \"\$SOCK\" send-keys -t \"\$NAME\" \"~/launch_claude_rc.sh\" Enter
 EOF
 chmod +x ~/start_claude_rc_tmux.sh"
 ```
@@ -125,9 +125,17 @@ window, then the session, then the **server itself** — leaving nothing to
 reconnect to and no way to see what went wrong. With it, a crashed pane just
 sits there dead-but-visible, and the session (and server) survive.
 
-If setting up more than one project on the same host, use a distinct
-session name per project (e.g. `claude-rc-<project>`) instead of the bare
-`claude-rc` default, to avoid collisions.
+If setting up more than one project on the same host, give each project its
+own **socket** (`SOCK=claude-rc-<project>`, plus a matching session name and
+service unit), not just its own session name. A tmux server lives in the cgroup
+of the systemd unit that started it, so with a shared server, restarting one
+project's unit (needrestart does this after library upgrades, with
+`KillMode=control-group`) kills every project's session along with it. The
+commands below use `-L claude-rc`; substitute the project's socket.
+
+Also exclude the claude-rc units from needrestart, so a library upgrade never
+restarts them under live work: a file in `/etc/needrestart/conf.d/` with
+`$nrconf{override_rc}{qr(^claude-rc)} = 0;`.
 
 ### Step 4: Wire it into systemd for reboot survival
 
@@ -162,7 +170,7 @@ not by systemd restarting anything.
 ### Step 5: Verify
 
 ```bash
-ssh <host> "tmux capture-pane -t claude-rc -p -S -30"
+ssh <host> "tmux -L claude-rc capture-pane -t claude-rc -p -S -30"
 ```
 
 Look for:
@@ -178,7 +186,7 @@ That URL is what connects claude.ai/code or the mobile app to this session.
 Also confirm the boot wiring:
 ```bash
 ssh <host> "systemctl is-enabled claude-rc.service && systemctl is-active claude-rc.service"
-ssh <host> "tmux show-options -t claude-rc remain-on-exit"
+ssh <host> "tmux -L claude-rc show-options -t claude-rc remain-on-exit"
 ```
 
 Expect `enabled`, `active`, and `remain-on-exit on`.
@@ -233,19 +241,14 @@ discover the duplication on their own and think something's broken.
 
 When the user says "respawn claude rc" (or the pane in `claude-rc` is dead),
 **do not just kill and relaunch blindly.** Killing the live `claude rc`
-process takes down every background worker it spawned too, even ones that
-look fully independent at the OS level — this was hit directly on mnt1: 7
-background `opencode` workers each had their own session ID (`SID == PID`,
-detached from the parent's session), which looked like it should protect
-them from a plain `kill` of the parent. Empirically, most of them still died
-when the parent was killed — the likely cause is their stdout/stderr being
-piped back to the parent for output-streaming, so they got `SIGPIPE`d once
-that pipe's reader vanished, independent of session/process-group semantics.
+process takes down every background worker it spawned too, even ones in their
+own session (`SID == PID`): most die from `SIGPIPE` when the parent's output pipe
+closes, whatever their session or process group.
 
 **Before respawning, always check for live in-flight work:**
 
 ```bash
-ssh <host> "ps --forest -o pid,ppid,etime,cmd -g \$(tmux list-panes -t claude-rc -F '#{pane_pid}')"
+ssh <host> "ps --forest -o pid,ppid,etime,cmd -g \$(tmux -L claude-rc list-panes -t claude-rc -F '#{pane_pid}')"
 ```
 
 If there are active child processes (builds, tests, subagent workers), tell
@@ -267,7 +270,7 @@ running:
 
 ```bash
 # If the pane is dead but the session/server is intact (the remain-on-exit case):
-ssh <host> "tmux respawn-pane -t claude-rc -k '~/launch_claude_rc.sh'"
+ssh <host> "tmux -L claude-rc respawn-pane -t claude-rc -k '~/launch_claude_rc.sh'"
 
 # If a stray un-wrapped process is running outside tmux (e.g. the web UI
 # restarted it directly — see Step 1):
@@ -291,7 +294,7 @@ stale.
 
 ## Troubleshooting
 
-**Error:** `tmux ls` → `no server running on /tmp/tmux-<uid>/default`
+**Error:** `tmux -L claude-rc ls` → `no server running on /tmp/tmux-<uid>/claude-rc`
 **Cause:** The tmux server's last session lost its last pane (crash without
 `remain-on-exit`, or the session was explicitly killed) and the server
 exited with it. This is what "wrap it in tmux" is meant to prevent going

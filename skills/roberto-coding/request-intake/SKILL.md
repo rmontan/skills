@@ -120,9 +120,8 @@ you are running as a subagent, do not call `AskUserQuestion` at all — every ch
 skill would normally put to the user becomes an Open question with a recommended
 default, and your final report names the ones that need the owner.
 
-This mode is what made a 76-entry batch (2026-09-05) run at roughly 70–150 seconds per
-entry: the slow parts of intake are the human round-trips and the re-investigation,
-not the file write.
+The slow parts of intake are the human round-trips and the re-investigation, not the
+file write, so this mode makes a large batch fast.
 
 ### 0c. Obviously-trivial reports — capture, don't interrogate
 Some reports are unambiguous on arrival: a copy typo, a mislabeled button, a wrong
@@ -222,15 +221,10 @@ open at intake is not deferred to someone equally placed to make it — it is de
 an agent that cannot make it, mid-build, under pressure to finish. In practice it gets
 guessed and the guess ships.
 
-Confirmed in a real project (2026-09-09): a REQ was filed with the badge precedence for
-one contact state left as an Open question with a recommended default. The coordinator
-"provisionally adopted" that default on the grounds that it shipped today and cost no
-behaviour change; the owner then overruled it with a product argument — a completed
-same-account merge deletes one of the pair, so the shipping badge reports the *input* to
-a finished operation as though it still needs action — that neither the entry nor the
-coordinator had. That was not a close call the coordinator lost; it was a decision that
-could not be made correctly without the owner, made anyway because the entry did not
-settle it.
+A recommended default does not settle such a question: the coordinator tends to adopt
+it as "what ships today", and the owner can then overrule it with a product argument
+neither the entry nor the coordinator had. Such a decision cannot be made correctly
+without the owner, so the entry has to get it settled.
 
 **But do not over-scope, and be careful what you assert.** Three things stay out of the
 entry: *priority and effort* (the coordinator holds the whole backlog in view and you do
@@ -240,11 +234,9 @@ suite. Those are discovered with a keyboard, and an entry that specifies them an
 forces the WP either to fight the REQ or to deviate silently.
 
 The sharpest failure here is a **confident wrong assertion**, which is worse than an
-absent one because it suppresses the finding. Same project, 2026-09-08: an entry's Notes
-stated as fact that a set of user-facing strings were "the retired wizard's historical
-tiles, not evidence for changing the three live agreeing sites." They were the live
-onboarding picker, and the confident dismissal kept a real divergence out of the backlog
-until a later sweep found it. Mark what you confirmed by reading from what you inferred,
+absent one because it suppresses the finding: a Notes line dismissing live code as
+"historical" keeps a real divergence out of the backlog until a later sweep finds it.
+Mark what you confirmed by reading from what you inferred,
 and prefer "unverified" to a tidy claim.
 
 The cut, in one line: **what the product should do, and which architecture — settle with
@@ -306,10 +298,8 @@ failure modes need.
     stay staged/committed together as their own atomic unit regardless of what else
     is sitting uncommitted in the tree). Only treat the finding as real, and worth
     surfacing or fixing, once `git log -- <path>` shows it's actually committed.
-    Confirmed happening in practice, 2026-09-04: a concurrent session's freshly
-    written `REQ-0488` file tripped `check-backlog` for another session before it had
-    committed; the file was legitimate and was committed (with its `BACKLOG.md` row)
-    moments later.
+    A concurrent session's freshly written REQ file can trip `check-backlog` for you
+    in the moments before it commits it with its `BACKLOG.md` row.
 - Push mechanics: `git fetch origin main && git rebase origin/main` (only if you
   weren't already at its tip) `&& git push origin HEAD:main`. Plain fast-forward,
   never `--force`. If it's rejected because `main` moved since your fetch, that's an
@@ -346,8 +336,7 @@ scanning.**
 > bare as `scripts/reserve-req-id.sh`, it reads as repo-relative, and an agent working
 > in a project checkout looks for `./scripts/reserve-req-id.sh`, doesn't find it, and
 > silently falls back to scan-then-write — which is the exact collision this section
-> exists to prevent. Confirmed happening in a real project (2026-08-26): every intake
-> run there had been scanning, and nobody knew, because the fallback is quiet.
+> exists to prevent, and nobody notices, because the fallback is quiet.
 > If you genuinely cannot locate the script, **say so in your report** and note that
 > the number was scanned rather than reserved.
 
@@ -430,11 +419,9 @@ are one logical unit — `check-backlog`-style gates (and a coordinator reading 
 index) treat a row with no file, or a file with no row, as broken state. Committing
 them together, inside the same lock used for the ID reservation, means no other
 process — another intake session or a coordinator mid-bookkeeping-commit — can ever
-observe or accidentally commit half of this update. This replaces an earlier
-version of this skill that left the file and row uncommitted for the rest of the
-conversation (clarifying questions, proposed approach, confirmation); a coordinator
-session committing its own `BACKLOG.md` changes in that window once picked up an
-in-progress row with no backing file and shipped a broken `main`. **When draining a
+observe or accidentally commit half of this update. Leaving them
+uncommitted while you clarify or propose lets a coordinator's own `BACKLOG.md` commit
+pick up a row with no backing file and ship a broken `main`. **When draining a
 queue** (§0), this means commit after *each* item, not batched at the end of the
 run — a crash mid-queue must never leave more than one item's worth of uncommitted
 backlog state.
@@ -443,10 +430,8 @@ backlog state.
 index row after releasing the lock (a quoting artifact, a wrong slug, a typo in the
 title), fix it by re-acquiring the lock and committing the fix as its own commit —
 never by editing `docs/backlog/` in place while another session may be mid-commit.
-Confirmed in a parallel batch (2026-09-05): one session fixed its own `BACKLOG.md` row
-outside the lock, and a neighbouring session's `git add docs/backlog/BACKLOG.md`
-swept that edit into *its* commit. The content ended up correct, but attributed to
-the wrong commit, and only because the edit happened to be benign.
+An edit made outside the lock can be swept into a neighbouring session's
+`git add docs/backlog/BACKLOG.md` and land in *its* commit.
 
 - Fill every section you can in the template from `assets/request-template.md`; leave
   coordinator-owned fields (`priority`, `wp`) unset. If you did §4, fill the optional
