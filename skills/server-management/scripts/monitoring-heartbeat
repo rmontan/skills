@@ -1,0 +1,18 @@
+#!/bin/sh
+# monitoring-heartbeat <ping-url>
+# Runs on the monitoring box (sandbox) from cron every 5 minutes. Checks that the local
+# monitoring stack answers, then pings an EXTERNAL Healthchecks (healthchecks.io):
+#   all healthy -> <ping-url>        (success)
+#   any down    -> <ping-url>/fail   with the names of what is down
+# If sandbox itself is down, no ping arrives and healthchecks.io alerts on the silence.
+# Its alerts must not go through the self-hosted ntfy, which would be down with it.
+url=$1; down=""
+curl -fsS -m 5 -o /dev/null http://localhost:8000/api/v3/status/ 2>/dev/null || down="$down healthchecks"
+curl -fsS -m 5 http://localhost:2586/v1/health 2>/dev/null | grep -q '"healthy":true' || down="$down ntfy"
+curl -fsS -m 5 -o /dev/null http://localhost:3001/ 2>/dev/null || down="$down uptime-kuma"
+curl -fsS -m 5 -o /dev/null http://localhost:8090/api/health 2>/dev/null || down="$down beszel"
+if [ -z "$down" ]; then
+	curl -fsS -m 10 --retry 3 -o /dev/null "$url"
+else
+	echo "down on $(hostname):$down" | curl -fsS -m 10 --retry 3 --data-binary @- -o /dev/null "$url/fail"
+fi

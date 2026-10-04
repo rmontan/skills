@@ -154,8 +154,11 @@ does not depend on DNS/NPM. Email alerting is not working (SMTP credentials reje
   `sudo tee -a`) and synced on hub restart — that file is authoritative (systems missing
   from it are removed), so add new hosts there, not only in the UI. The hub's public key
   is the `KEY` in each agent's compose file.
-- **Nothing watches sandbox itself** unless an external dead-man check exists — if it
-  dies, every monitor and the notifier die with it.
+- **Sandbox itself is watched from outside**: roberto's crontab on sandbox runs this skill's
+  `scripts/monitoring-heartbeat` (installed at `/usr/local/bin/monitoring-heartbeat`) every 5
+  minutes. It pings a healthchecks.io check (owner's account) only when Healthchecks, ntfy,
+  Kuma and Beszel all answer locally, and sends `/fail` naming what is down otherwise. That
+  check must alert by email/app from healthchecks.io, never via the self-hosted ntfy.
 - Sandbox's watchtower has no label filter: these `:latest`/`:2` images auto-update daily.
 
 ## Before Running Anything
