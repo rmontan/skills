@@ -398,17 +398,23 @@ noticed, dead code it left. Sort **every one** into exactly one bucket **now, be
 step 9's integration gate**, so a tidy-up rides the gate and CI run you are about to pay
 for anyway:
 
-1. **Small, and inside the files this WP already owns** — a stale comment, a dead helper,
-   a duplicate within its own files, a test-helper fix, a missing test for code it wrote.
+1. **Small, and in files this WP owns or that no in-flight WP owns** — a stale comment,
+   a dead helper, a duplicate, a test-helper fix, a missing test for code it wrote.
    **Resume the same agent** (e.g. `SendMessage` to its id — not a fresh dispatch; it
    still holds the context) with the items as an explicit extra task and the same
    definition-of-done, then re-verify the WP. This is not the failed-agent re-dispatch
-   above and needs no user approval: the WP succeeded, it is being asked to finish its
-   own area.
-2. **Small, but in files the WP does not own** — file a REQ **now** (request-intake,
-   structured-brief mode), naming the file, and note it as a bundling candidate so step 4
-   rides it on the next WP that touches that file. Do not widen this WP: disjoint
-   ownership is what keeps parallel agents from colliding.
+   above and needs no user approval: the WP succeeded, it is being asked to finish what
+   it found. Before resuming onto a file the WP did not own, check that no in-flight WP
+   owns it and no `in-progress` REQ lists it, that it is not a composition root or a
+   data-loss/security path the profile names, and that the fix is within the tier the
+   agent ran on (you judge that against step 5's scoring, not the agent). The file then
+   joins this WP's set, so the next dispatch sees it as taken. The agent never widens
+   its own scope; it reports, you decide.
+2. **Small, but in files another in-flight WP owns** (or failing a check above) — first
+   look for a `ready`, undispatched REQ whose areas cover the same file and add the item
+   there as an acceptance box; otherwise file a REQ **now** (request-intake,
+   structured-brief mode), naming the file, as a bundling candidate so step 4 rides it on
+   the next WP that touches that file. One REQ per file cluster, not one per finding.
 3. **Needs an owner decision, touches a data-loss/security path the profile names, or
    would score high-coupling** — file a REQ with the question in it; surface it in the
    report.
