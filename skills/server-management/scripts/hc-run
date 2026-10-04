@@ -1,0 +1,10 @@
+#!/bin/sh
+# hc-run <check-uuid> <logfile> <command...>
+# Runs a cron job and reports to Healthchecks (https://hc.contactz.app):
+# /start before, then the exit code with the last 40 log lines. Never changes the job's own exit code.
+uuid=$1; log=$2; shift 2
+url="https://hc.contactz.app/ping/$uuid"
+curl -fsS -m 10 --retry 3 -o /dev/null "$url/start" || true
+"$@" >> "$log" 2>&1; rc=$?
+tail -n 40 "$log" | curl -fsS -m 10 --retry 3 --data-binary @- -o /dev/null "$url/$rc" || true
+exit $rc

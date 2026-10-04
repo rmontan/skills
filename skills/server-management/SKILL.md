@@ -8,7 +8,7 @@ description: |
   passwordless-sudo `roberto` user; nas is GUI-managed only, no CLI Docker/app changes.
 license: MIT
 metadata:
-  version: "2.3.0"
+  version: "2.4.0"
   category: infrastructure
   servers:
     srv1:
@@ -34,7 +34,7 @@ metadata:
       connection: ssh sandbox
       ip: 10.10.10.233
       os: Ubuntu Linux
-      role: Test server
+      role: Test server + monitoring box (Beszel hub, Uptime Kuma, Healthchecks, ntfy)
       user: roberto (passwordless sudo)
       hosting: VM on nas
       management: full, with confirmation for dangerous ops
@@ -54,6 +54,7 @@ metadata:
       os: Ubuntu Linux
       role: Production server for contactzapp (app.contactz.app), being set up
       user: roberto (passwordless sudo)
+      hosting: Hetzner, behind a Hetzner firewall (80/443 public, all ports from home); no host firewall
       management: over SSH only — no Claude Code, opencode or skillshare on the host, by design
     nas:
       alias: nas
@@ -99,7 +100,9 @@ along the paths listed under Network Topology.
 - **czap1** (2.31.19.232): production server for **contactzapp** (public site `app.contactz.app`).
   Reachable from the **Mac** (`ssh czap1`) and from **mnt1** (`ssh czap1`, h2h key). `roberto`
   user with passwordless sudo. Treat as a leaf like srv1: it has no SSH keys to reach
-  anything else. It is production, so apply the same confirmation discipline. It is
+  anything else. It is production, so apply the same confirmation discipline. It sits behind a **Hetzner
+  firewall**: only 80/443 from the internet, everything from the home network; the host
+  itself has no firewall (ufw inactive). It is
   managed over SSH only, by design: no Claude Code, opencode or skillshare runs on it,
   and none should be installed.
 - **tmp1** (2.29.62.35): temporary Hetzner server, being shut down soon, not shown in the diagram. Reachable
@@ -109,15 +112,51 @@ along the paths listed under Network Topology.
   home NAT IP only (81.56.206.190). Services publish via `network_mode: host`, not
   Docker port mappings, because Docker-published ports bypass ufw.
 
-## Monitoring (Beszel)
+## Monitoring (sandbox is the monitoring box)
 
-Central Beszel hub on **sandbox**: `/docker/beszel/`, UI at http://10.10.10.233:8090.
-Agents: sandbox (same compose, via unix socket), mnt1 `/docker/beszel-agent/`
-(:45876), tmp1 `/docker/beszel/` (agent-only, :45876, ufw-allowed from home NAT IP).
-srv1 has no agent, on purpose. Systems are defined in
-`/docker/beszel/data/beszel_data/config.yml` on sandbox and synced on hub restart —
-that file is authoritative (systems missing from it are removed), so add new hosts
-there, not only in the UI. The hub's public key is the `KEY` in each agent's compose file.
+Everything below runs on **sandbox**; production is watched from there. Alerts go to
+**ntfy** (topic `alerts`) → the ntfy phone/web app. Tools publish to ntfy over the LAN
+(`http://10.10.10.233:2586`, publisher token), never via the public hostname, so alerting
+does not depend on DNS/NPM. Email alerting is not working (SMTP credentials rejected).
+
+| Service | Path on sandbox | URL | Credentials |
+|---|---|---|---|
+| Beszel hub | `/docker/beszel/` | http://10.10.10.233:8090 | owner |
+| Uptime Kuma (v2, SQLite) | `/docker/uptime-kuma/` | http://10.10.10.233:3001 | owner |
+| Healthchecks (SQLite) | `/docker/healthchecks/` | http://10.10.10.233:8000 | login `admin@contactz.app`, password in `admin.credentials` (600); secrets in `.env` (600) |
+| ntfy | `/docker/ntfy/` | https://ntfy.contactz.app (NPM) · LAN :2586 | `credentials` (600): publisher token, read-only `probe` user; `admin` password is owner-held, not stored |
+
+- **ntfy** is `auth-default-access: deny-all`, signup off, web push on, iOS relay via
+  `upstream-base-url: https://ntfy.sh` (message text stays local). The NPM proxy host
+  needs **no Advanced config** — ntfy sends `X-Accel-Buffering: no` and a 45 s
+  keepalive; a pasted nginx snippet (`proxy_http_version`, buffering, timeouts) took the
+  host Offline. Force SSL is on.
+- **Healthchecks** is at `https://hc.contactz.app` (NPM): only `/ping` is public; every
+  other path has a custom location `/` with access list `local` (allows `10.10.10.0/24` and
+  `192.168.1.254` — LAN clients reach NPM through the outer router as .254; internet clients
+  keep their real IP). `SITE_ROOT=https://hc.contactz.app`. `INTEGRATIONS_ALLOW_PRIVATE_IPS`
+  is on so it can reach ntfy on the LAN. Admin via `docker compose exec healthchecks
+  ./manage.py …` (its `createsuperuser` takes `--email/--password`, not `--noinput`).
+- **Cron jobs report through `/usr/local/bin/hc-run <uuid> <logfile> <cmd…>`**: pings
+  `/start`, runs the job appending to the log, then pings the exit code with the last 40 log
+  lines; curl failures never affect the job. The one source is this skill's `scripts/hc-run` —
+  install it with `sudo install -o root -g root -m 755 <skill>/scripts/hc-run
+  /usr/local/bin/hc-run` (czap1 has no skillshare: copy it over ssh), never hand-edit a host
+  copy. Wired: czap1 pgbackrest full/diff (roberto crontab) and restic
+  (`/etc/cron.d/czap1-restic`); mnt1's six roberto cron jobs. A new check is created in the
+  Healthchecks UI or `manage.py shell` (cron schedule, tz, grace) and its UUID goes in the
+  cron line. Healthchecks' check descriptions say in plain English what each job does.
+- **Beszel agents**: sandbox (same compose, unix socket), mnt1 `/docker/beszel-agent/`
+  (:45876), czap1 `/docker/beszel-agent/` (:45876, reachable from home only via the
+  Hetzner firewall), tmp1 `/docker/beszel/` (agent-only, ufw-allowed from home NAT IP).
+  srv1 has no agent, on purpose. Systems are defined in
+  `/docker/beszel/data/beszel_data/config.yml` on sandbox (owned 1001:110 — append with
+  `sudo tee -a`) and synced on hub restart — that file is authoritative (systems missing
+  from it are removed), so add new hosts there, not only in the UI. The hub's public key
+  is the `KEY` in each agent's compose file.
+- **Nothing watches sandbox itself** unless an external dead-man check exists — if it
+  dies, every monitor and the notifier die with it.
+- Sandbox's watchtower has no label filter: these `:latest`/`:2` images auto-update daily.
 
 ## Before Running Anything
 
