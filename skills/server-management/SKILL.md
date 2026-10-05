@@ -27,7 +27,7 @@ metadata:
       os: Ubuntu Linux
       role: Personal server
       user: roberto (passwordless sudo)
-      hosting: VM on nas
+      hosting: KVM/QEMU VM on its own physical host (separate hardware, NOT the nas); same home LAN
       management: full, with confirmation for dangerous ops
     sandbox:
       alias: sandbox
@@ -61,7 +61,7 @@ metadata:
       connection: ssh nas
       ip: 10.10.10.102
       os: TrueNAS Scale (Debian-based)
-      role: Home NAS, hosts mnt1/sandbox VMs, runs NPM (Nginx Proxy Manager)
+      role: Home NAS, hosts the sandbox VM, runs NPM (Nginx Proxy Manager)
       user: admin (SSH login user — no roberto account on nas)
       management: read-only via CLI; all app/container/storage changes go through the TrueNAS web UI
 ---
@@ -81,8 +81,8 @@ along the paths listed under Network Topology.
         │           │          │           │
         ▼           ▼          ▼           ▼
       srv1        mnt1      sandbox       nas
-   (Hetzner,     (VM on    (VM on     (TrueNAS,
-    isolated)      nas)       nas)     hosts NPM)
+   (Hetzner,    (VM, own   (VM on     (TrueNAS,
+    isolated)   hardware)    nas)     hosts NPM)
         ▲           │  ▲       │  ▲
         │           └──┼───────┘  │
         └──────────────┘──────────┘
