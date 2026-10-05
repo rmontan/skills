@@ -5,7 +5,7 @@ description: |
   tmp1 (temporary Hetzner server, being shut down), or nas (TrueNAS Scale) — SSH connections, Docker containers, package updates,
   code deployment, log analysis, or checking service/firewall status on the home lab. Also covers the Purelymail
   mail hosting (mailboxes, domains, routing/aliases for contactz.app etc.) via its API — see "Purelymail".
-  Access via `ssh srv1`, `ssh czap1`, `ssh mnt1`, `ssh sandbox`, `ssh tmp1`, `ssh nas`. All Linux hosts have a
+  Access via `ssh srv1`, `ssh czap1`, `ssh mnt1`, `ssh sandbox`, `ssh czadmin`, `ssh tmp1`, `ssh nas`. All Linux hosts have a
   passwordless-sudo `roberto` user; nas is GUI-managed only, no CLI Docker/app changes.
 license: MIT
 metadata:
@@ -37,6 +37,15 @@ metadata:
       os: Ubuntu Linux
       role: Test server + monitoring box (Beszel hub, Uptime Kuma, Healthchecks, ntfy)
       user: roberto (passwordless sudo)
+      hosting: VM on nas
+      management: full, with confirmation for dangerous ops
+    czadmin:
+      alias: czadmin
+      connection: ssh czadmin (from the Mac or mnt1)
+      ip: 10.10.10.234
+      os: Ubuntu 26.04 LTS (2 vCPU, 2.5 GB RAM, 23 GB disk)
+      role: Admin VM for contactzapp — will host the detached admin panel (REQ-1701) and the monitoring stack moving off sandbox. Never a CI runner.
+      user: roberto (passwordless sudo — PENDING, owner to enable)
       hosting: VM on nas
       management: full, with confirmation for dangerous ops
     tmp1:
@@ -106,6 +115,11 @@ along the paths listed under Network Topology.
   itself has no firewall (ufw inactive). It is
   managed over SSH only, by design: no Claude Code, opencode or skillshare runs on it,
   and none should be installed.
+- **czadmin** (10.10.10.234): admin VM on the nas, created 2026-10-05. Reachable from the **Mac**
+  (GitHub key) and from **mnt1** (`ssh czadmin`, h2h key — mnt1's `id_ed25519` is the GitHub key
+  but passphrase-protected, so it cannot log in non-interactively). It will host the detached
+  admin panel and the monitoring stack; it must **never** run a CI runner (a runner with
+  docker.sock is root, and the panel holds per-environment admin tokens).
 - **tmp1** (2.29.62.35): temporary Hetzner server, being shut down soon, not shown in the diagram. Reachable
   from the **Mac** and from **mnt1** (`ssh tmp1`); sandbox has no alias for it, and tmp1
   has no SSH config/keys to reach anything else (treat it as a leaf, like srv1). Its
