@@ -133,8 +133,8 @@ along the paths listed under Network Topology.
 
 ## Monitoring (czadmin is the monitoring box)
 
-Since 2026-10-05 ntfy, Healthchecks and Uptime Kuma run on **czadmin** (moved from sandbox);
-**Beszel is still on sandbox** until it moves too. Production is watched from there. Alerts go to
+Since 2026-10-05 the whole stack (ntfy, Healthchecks, Uptime Kuma, Beszel) runs on **czadmin**,
+moved from sandbox. Production is watched from there. Alerts go to
 **ntfy** (topic `alerts`) → the ntfy phone/web app. Tools publish to ntfy over the LAN
 (`http://10.10.10.234:2586`, publisher token), never via the public hostname, so alerting
 does not depend on DNS/NPM. Email goes out as `support@contactz.app` through Purelymail
@@ -145,7 +145,7 @@ temporary `beszel superuser`, deleted afterwards); Healthchecks' in `/docker/hea
 
 | Service | Host · path | URL | Credentials |
 |---|---|---|---|
-| Beszel hub | sandbox `/docker/beszel/` | http://10.10.10.233:8090 | owner |
+| Beszel hub | czadmin `/docker/beszel/` | http://10.10.10.234:8090 | owner |
 | Uptime Kuma (v2, SQLite) | czadmin `/docker/uptime-kuma/` | http://10.10.10.234:3001 | owner |
 | Healthchecks (SQLite) | czadmin `/docker/healthchecks/` | http://10.10.10.234:8000 | login `admin@contactz.app`, password in `admin.credentials` (600); secrets in `.env` (600) |
 | ntfy | czadmin `/docker/ntfy/` | https://ntfy.contactz.app (NPM) · http://10.10.10.234:2586 | `credentials` (600): publisher token, read-only `probe` user; `admin` password is owner-held, not stored |
@@ -171,21 +171,21 @@ temporary `beszel superuser`, deleted afterwards); Healthchecks' in `/docker/hea
   Healthchecks UI or `manage.py shell` (cron schedule, tz, grace) and its UUID goes in the
   cron line. Healthchecks' check descriptions say in plain English what each job does.
 - **Temporary relays (2026-10-05)**: sandbox `/docker/migration-forward/` runs socat relays on the
-  old ports 2586/8000/3001 → czadmin, so anything still aimed at sandbox (NPM until the owner
+  old ports 2586/8000/3001/8090 → czadmin, so anything still aimed at sandbox (NPM until the owner
   re-points `ntfy.contactz.app` and `hc.contactz.app` to 10.10.10.234, bookmarks) keeps working.
   Remove it once NPM points at czadmin and `docker logs fwd-*` show no traffic.
-- **Beszel agents**: sandbox (same compose, unix socket), mnt1 `/docker/beszel-agent/`
+- **Beszel agents**: czadmin (same compose as the hub, unix socket), sandbox `/docker/beszel-agent/`
+  (:45876, standalone since 2026-10-05), mnt1 `/docker/beszel-agent/`
   (:45876), czap1 `/docker/beszel-agent/` (:45876, reachable from home only via the
   Hetzner firewall), tmp1 `/docker/beszel/` (agent-only, ufw-allowed from home NAT IP).
   srv1 has no agent, on purpose. Systems are defined in
-  `/docker/beszel/data/beszel_data/config.yml` on sandbox (owned 1001:110 — append with
+  `/docker/beszel/data/beszel_data/config.yml` on czadmin (owned 1001:110 — append with
   `sudo tee -a`) and synced on hub restart — that file is authoritative (systems missing
   from it are removed), so add new hosts there, not only in the UI. The hub's public key
   is the `KEY` in each agent's compose file.
 - **The monitoring box is watched from outside**: roberto's crontab on czadmin runs this skill's
   `scripts/monitoring-heartbeat` (installed at `/usr/local/bin/monitoring-heartbeat`; czadmin has
-  no skillshare, so copy it over ssh) every 5 minutes, with `BESZEL_URL=http://10.10.10.233:8090`
-  while Beszel is still on sandbox. It pings a healthchecks.io check (owner's account) only when
+  no skillshare, so copy it over ssh) every 5 minutes. It pings a healthchecks.io check (owner's account) only when
   Healthchecks, ntfy, Kuma and Beszel all answer, and sends `/fail` naming what is down otherwise. That
   check must alert by email/app from healthchecks.io, never via the self-hosted ntfy.
 - The watchtowers on czadmin and sandbox have no label filter: these `:latest`/`:2` images auto-update daily.
