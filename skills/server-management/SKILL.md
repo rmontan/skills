@@ -35,7 +35,7 @@ metadata:
       connection: ssh sandbox
       ip: 10.10.10.233
       os: Ubuntu Linux
-      role: Test server + monitoring box (Beszel hub, Uptime Kuma, Healthchecks, ntfy)
+      role: Test server + CI runners (monitoring moved to czadmin 2026-10-05; Beszel agent only)
       user: roberto (passwordless sudo)
       hosting: VM on nas
       management: full, with confirmation for dangerous ops
@@ -44,7 +44,7 @@ metadata:
       connection: ssh czadmin (from the Mac or mnt1)
       ip: 10.10.10.234
       os: Ubuntu 26.04 LTS (2 vCPU, 2.5 GB RAM, 50 GB disk — root LV extended to the full VG; /tmp on disk, tmp.mount masked)
-      role: Admin VM for contactzapp — will host the detached admin panel (REQ-1701) and the monitoring stack moving off sandbox. Never a CI runner.
+      role: Admin VM for contactzapp — monitoring box (Beszel hub, Uptime Kuma, Healthchecks, ntfy) since 2026-10-05; will host the detached admin panel (REQ-1701). Never a CI runner.
       user: roberto (passwordless sudo, /etc/sudoers.d/90-roberto)
       hosting: VM on nas
       management: full, with confirmation for dangerous ops
