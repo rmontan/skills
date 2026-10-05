@@ -1,7 +1,7 @@
 ---
 name: server-management
 description: |
-  Use when managing srv1 (production), czap1 (contactzapp production), mnt1 (personal server), sandbox (test server),
+  Use when managing srv1 (production), czap1 (contactzapp production), mnt1 (personal server), sandbox (test server), czadmin (contactzapp admin VM),
   tmp1 (temporary Hetzner server, being shut down), or nas (TrueNAS Scale) — SSH connections, Docker containers, package updates,
   code deployment, log analysis, or checking service/firewall status on the home lab. Also covers the Purelymail
   mail hosting (mailboxes, domains, routing/aliases for contactz.app etc.) via its API — see "Purelymail".
@@ -43,9 +43,9 @@ metadata:
       alias: czadmin
       connection: ssh czadmin (from the Mac or mnt1)
       ip: 10.10.10.234
-      os: Ubuntu 26.04 LTS (2 vCPU, 2.5 GB RAM, 23 GB disk)
+      os: Ubuntu 26.04 LTS (2 vCPU, 2.5 GB RAM, 50 GB disk — root LV extended to the full VG; /tmp on disk, tmp.mount masked)
       role: Admin VM for contactzapp — will host the detached admin panel (REQ-1701) and the monitoring stack moving off sandbox. Never a CI runner.
-      user: roberto (passwordless sudo — PENDING, owner to enable)
+      user: roberto (passwordless sudo, /etc/sudoers.d/90-roberto)
       hosting: VM on nas
       management: full, with confirmation for dangerous ops
     tmp1:
@@ -71,7 +71,7 @@ metadata:
       connection: ssh nas
       ip: 10.10.10.102
       os: TrueNAS Scale (Debian-based)
-      role: Home NAS, hosts the sandbox VM, runs NPM (Nginx Proxy Manager)
+      role: Home NAS, hosts the sandbox and czadmin VMs, runs NPM (Nginx Proxy Manager)
       user: admin (SSH login user — no roberto account on nas)
       management: read-only via CLI; all app/container/storage changes go through the TrueNAS web UI
 ---
@@ -119,7 +119,11 @@ along the paths listed under Network Topology.
   (GitHub key) and from **mnt1** (`ssh czadmin`, h2h key — mnt1's `id_ed25519` is the GitHub key
   but passphrase-protected, so it cannot log in non-interactively). It will host the detached
   admin panel and the monitoring stack; it must **never** run a CI runner (a runner with
-  docker.sock is root, and the panel holds per-environment admin tokens).
+  docker.sock is root, and the panel holds per-environment admin tokens). Like czap1 it is
+  managed over SSH only: no Claude Code, opencode or skillshare on it, by design. Base setup
+  (2026-10-05): Docker CE from download.docker.com (same as sandbox), Docker Convention
+  uid/gid 1001:110, watchtower, portainer-agent (:9001, sandbox's agent secret), nightly
+  `~/scripts/docker-prune.sh` at 03:30 (generic prune only — no runner housekeeping).
 - **tmp1** (2.29.62.35): temporary Hetzner server, being shut down soon, not shown in the diagram. Reachable
   from the **Mac** and from **mnt1** (`ssh tmp1`); sandbox has no alias for it, and tmp1
   has no SSH config/keys to reach anything else (treat it as a leaf, like srv1). Its
@@ -261,7 +265,7 @@ managed through the TrueNAS web UI.
 **If a blocked operation is requested:** explain that TrueNAS management goes
 through the web UI, and offer to check current status via CLI instead.
 
-### srv1, czap1, mnt1, sandbox, tmp1 (Ubuntu) — full management, roberto user
+### srv1, czap1, czadmin, mnt1, sandbox, tmp1 (Ubuntu) — full management, roberto user
 
 **Allowed freely:**
 - Diagnostics: `uptime`, `df -h`, `free -h`, `lsblk`, `ps aux`, `top`, `ss`, `curl`, `ping`
@@ -294,7 +298,7 @@ Convention). Firewall changes there mean `ufw`, and still need confirmation.
 
 ---
 
-## Docker Convention (srv1, czap1, mnt1, sandbox; not tmp1)
+## Docker Convention (srv1, czap1, czadmin, mnt1, sandbox; not tmp1)
 
 Every container lives under **`/docker/<container-name>/`**, and every volume
 that container mounts must be a subdirectory of that same folder. No
@@ -315,7 +319,7 @@ exceptions — don't mount volumes elsewhere on the filesystem.
 **User/group:** containers run as `1001:110`, not root — set `user: "1001:110"` at
 the service level in every `docker-compose.yml`. Every host it covers has a uid-1001
 account (named `docker`) and a gid-110 group backing this (named `docker` on srv1,
-`docker-user` on mnt1/sandbox — the group *name* varies but the GID is always 110).
+`docker-user` on mnt1/sandbox/czadmin — the group *name* varies but the GID is always 110).
 `roberto` is a member of that gid-110 group on each of those hosts, plus each host's actual
 Docker daemon-socket group, so it can both administer containers (`docker ps`,
 `compose up`, etc.) and own/read/write the `1001:110` bind-mounted data without sudo.
@@ -350,7 +354,7 @@ Outside of `/docker/`, srv1 also uses:
 
 ## Dangerous Operation Confirmation
 
-Applies identically on every Linux host (srv1, czap1, mnt1, sandbox, tmp1) — no server gets a pass, and production gets no extra strictness either: the same discipline everywhere.
+Applies identically on every Linux host (srv1, czap1, czadmin, mnt1, sandbox, tmp1) — no server gets a pass, and production gets no extra strictness either: the same discipline everywhere.
 
 ```
 I'm going to [ACTION] on [SERVER].
@@ -380,8 +384,8 @@ srv1, mnt1, and sandbox each have `skillshare` installed with `~/.config/skillsh
 cloned from `git@github.com:rmontan/skills.git` (global mode, `git_root: root`) — this
 is the same repo the Mac's `~/.config/skillshare` syncs from. Skills land symlinked
 into `~/.claude/skills`, `~/.gemini/skills`, and `~/.config/opencode/skills` on all
-three (Claude, agy/antigravity, and opencode are used on all of them). czap1 and tmp1
-have no skillshare, deliberately.
+three (Claude, agy/antigravity, and opencode are used on all of them). czap1, czadmin and
+tmp1 have no skillshare, deliberately.
 
 **"Sync skills to all servers" / "update skills on srv1/mnt1/sandbox" means:**
 ```bash
