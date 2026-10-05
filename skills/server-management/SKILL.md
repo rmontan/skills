@@ -118,7 +118,11 @@ along the paths listed under Network Topology.
 Everything below runs on **sandbox**; production is watched from there. Alerts go to
 **ntfy** (topic `alerts`) → the ntfy phone/web app. Tools publish to ntfy over the LAN
 (`http://10.10.10.233:2586`, publisher token), never via the public hostname, so alerting
-does not depend on DNS/NPM. Email alerting is not working (SMTP credentials rejected).
+does not depend on DNS/NPM. Email goes out as `support@contactz.app` through Purelymail
+(`smtp.purelymail.com:465`, implicit TLS), each service with its **own app password**
+(`beszel-sandbox`, `healthchecks-sandbox` — see "Purelymail"); revoke one without touching the
+others. Beszel's SMTP lives in its PocketBase settings (change it through the settings API with a
+temporary `beszel superuser`, deleted afterwards); Healthchecks' in `/docker/healthchecks/.env`.
 
 | Service | Path on sandbox | URL | Credentials |
 |---|---|---|---|
