@@ -3,12 +3,13 @@ name: server-management
 description: |
   Use when managing srv1 (production), czap1 (contactzapp production), mnt1 (personal server), sandbox (test server),
   tmp1 (temporary Hetzner server, being shut down), or nas (TrueNAS Scale) — SSH connections, Docker containers, package updates,
-  code deployment, log analysis, or checking service/firewall status on the home lab.
+  code deployment, log analysis, or checking service/firewall status on the home lab. Also covers the Purelymail
+  mail hosting (mailboxes, domains, routing/aliases for contactz.app etc.) via its API — see "Purelymail".
   Access via `ssh srv1`, `ssh czap1`, `ssh mnt1`, `ssh sandbox`, `ssh tmp1`, `ssh nas`. All Linux hosts have a
   passwordless-sudo `roberto` user; nas is GUI-managed only, no CLI Docker/app changes.
 license: MIT
 metadata:
-  version: "2.4.0"
+  version: "2.5.0"
   category: infrastructure
   servers:
     srv1:
@@ -389,6 +390,71 @@ out-of-band (not via git/skillshare), and not readable without the right permiss
 
 If a task needs a credential from it, read the specific value you need rather than
 dumping the whole file, and don't echo secret values back into chat or logs.
+
+| Key | What it is |
+|---|---|
+| `PURELYMAIL_API_TOKEN` | Purelymail account API token — see "Purelymail". Present on **mnt1** only (the host agents run mail work from); add it to sandbox/srv1 only if a task there needs it. Never on czap1/tmp1. |
+
+---
+
+## Purelymail (mail hosting for contactz.app)
+
+Mailboxes, domains and aliases are hosted at Purelymail and managed through its JSON API.
+Spec: <https://news.purelymail.com/api/index.html> (Swagger UI; the machine-readable spec is
+`https://news.purelymail.com/api/swagger-spec.js`).
+
+**Always go through `scripts/purelymail`** (installed at `/usr/local/bin/purelymail`; same
+rule as `hc-run`: `sudo install -o root -g root -m 755 <skill>/scripts/purelymail
+/usr/local/bin/purelymail`, never hand-edit a host copy). It reads `PURELYMAIL_API_TOKEN`
+from the environment or `~/.config/server/credentials.env`, passes it to curl on stdin (not
+argv), and prints the raw JSON. Do not write your own `curl` with the token, do not `source`
+the credentials file, do not print the token.
+
+```bash
+purelymail <operation> '<json body>'          # POST https://purelymail.com/api/v0/<operation>
+purelymail listDomains
+purelymail listUser
+purelymail getUser '{"userName":"info@contactz.app"}'
+```
+
+The token is the account-level key: it can do everything the web console can, and the spec
+shows no scoping. Treat it like a root credential.
+
+**Operations (all POST, JSON body, header `Purelymail-Api-Token`):**
+
+| Area | Operation → body |
+|---|---|
+| Users | `listUser` · `getUser {userName}` · `createUser {userName (local part), domainName, password, enablePasswordReset?, recoveryEmail?, sendWelcomeEmail?, enableSearchIndexing?}` · `modifyUser {userName, newUserName?, newPassword?, enablePasswordReset?, requireTwoFactorAuthentication?, enableSearchIndexing?}` · `deleteUser {userName}` |
+| Password reset | `listPasswordReset {userName}` · `upsertPasswordReset {userName, type: email\|phone, target, description?, allowMfaReset?, existingTarget?}` · `deletePasswordReset {userName, target}` |
+| Routing / aliases | `listRoutingRules` · `createRoutingRule {domainName, prefix, matchUser, targetAddresses[], catchall?}` · `deleteRoutingRule {routingRuleId}` (id comes from `listRoutingRules`) |
+| Domains | `listDomains {includeShared?}` · `addDomain {domainName}` · `getOwnershipCode` · `updateDomainSettings {name, allowAccountReset?, symbolicSubaddressing?, recheckDns?}` · `deleteDomain {name}` |
+| App passwords | `createAppPassword {userHandle, name?}` → `{appPassword}` · `deleteAppPassword {userName, appPassword}` |
+| Billing | `checkAccountCredit` |
+
+`userName` is the **local part** in `createUser` but the **full address** everywhere else.
+An error comes back as HTTP 200 with `{"type":"error","code":…,"message":…}`; the wrapper
+turns that into a non-zero exit.
+
+**Rules for agents:**
+- Read-only calls (`list*`, `get*`, `checkAccountCredit`) are free to use. Start with a read
+  to see current state before changing anything.
+- The wrapper refuses `deleteUser`, `deleteDomain`, `deleteRoutingRule`, `deleteAppPassword`,
+  `deletePasswordReset`, `modifyUser`, `createRoutingRule` and `updateDomainSettings` unless
+  `PURELYMAIL_CONFIRMED=1` is set. Set it **only after** the owner has said yes in this
+  conversation, using the Dangerous Operation template (action, effect, what it affects).
+  `deleteUser` destroys the mailbox and its mail irrecoverably; `deleteDomain` and
+  routing changes can silently stop inbound mail.
+- `createUser`/`modifyUser` take a password in the body. Generate it (`openssl rand -base64 24`),
+  hand it to the owner through a file or the owner's password manager, never into chat, a
+  commit, a REQ or a log. Prefer `createAppPassword` for a program that needs mailbox access
+  (IMAP/SMTP/CardDAV) so the real password stays out of config files.
+- Never print or paste `PURELYMAIL_API_TOKEN`, an `appPassword` or a `newPassword`
+  response into chat, a report, a REQ, or the repo. Redact them from anything you quote.
+- DNS for a domain (MX/SPF/DKIM/DMARC) is not set through this API: `listDomains` reports
+  `dnsSummary.passesMx/Spf/Dkim/Dmarc`, `updateDomainSettings {recheckDns:true}` re-runs
+  the check. Records themselves are edited at the DNS provider.
+- Rotate the token in the Purelymail console (account settings → API) and replace the
+  value in `credentials.env` if it is ever exposed.
 
 ---
 

@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# purelymail — thin wrapper over the Purelymail API (https://purelymail.com/api/v0/<op>).
+#
+#   purelymail <operation> ['<json body>']
+#   purelymail listUser
+#   purelymail getUser '{"userName":"info@contactz.app"}'
+#
+# The token is read from PURELYMAIL_API_TOKEN in the environment, or else from
+# ~/.config/server/credentials.env. It is never printed and never put on a command line
+# (curl reads the header from stdin), so it cannot land in `ps`, shell history or logs.
+# Output is the raw JSON response. Exit status is non-zero on HTTP or API errors.
+#
+# Operations that destroy or change credentials refuse to run unless PURELYMAIL_CONFIRMED=1
+# is set, which an agent may do only after the owner has said yes in this conversation.
+set -euo pipefail
+
+CRED="${SERVER_CREDENTIALS_FILE:-$HOME/.config/server/credentials.env}"
+BASE="https://purelymail.com/api/v0"
+
+op="${1:-}"
+body="${2:-{\}}"
+[ -n "$op" ] || { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+case "$op" in *[!A-Za-z]*) echo "purelymail: bad operation name" >&2; exit 2;; esac
+
+token="${PURELYMAIL_API_TOKEN:-}"
+if [ -z "$token" ] && [ -r "$CRED" ]; then
+  token="$(grep -E '^PURELYMAIL_API_TOKEN=' "$CRED" | tail -n1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true)"
+fi
+[ -n "$token" ] || { echo "purelymail: PURELYMAIL_API_TOKEN not set (env or $CRED)" >&2; exit 1; }
+
+case "$op" in
+  deleteUser|deleteDomain|deleteRoutingRule|deleteAppPassword|deletePasswordReset|modifyUser|createRoutingRule|updateDomainSettings)
+    if [ "${PURELYMAIL_CONFIRMED:-}" != "1" ]; then
+      echo "purelymail: '$op' changes or deletes live mail config. Get the owner's yes, then rerun with PURELYMAIL_CONFIRMED=1." >&2
+      exit 3
+    fi ;;
+esac
+
+out="$(mktemp)"; trap 'rm -f "$out"' EXIT
+code="$(printf 'header = "Purelymail-Api-Token: %s"\n' "$token" |
+  curl -sS -m 30 -K - -X POST "$BASE/$op" -H 'Content-Type: application/json' \
+       --data "$body" -o "$out" -w '%{http_code}')"
+cat "$out"; echo
+[ "$code" = "200" ] && ! grep -q '"type" *: *"error"' "$out" || { echo "purelymail: HTTP $code" >&2; exit 1; }
