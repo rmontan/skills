@@ -170,10 +170,6 @@ temporary `beszel superuser`, deleted afterwards); Healthchecks' in `/docker/hea
   (`/etc/cron.d/czap1-restic`); mnt1's six roberto cron jobs. A new check is created in the
   Healthchecks UI or `manage.py shell` (cron schedule, tz, grace) and its UUID goes in the
   cron line. Healthchecks' check descriptions say in plain English what each job does.
-- **Temporary relays (2026-10-05)**: sandbox `/docker/migration-forward/` runs socat relays on the
-  old ports 2586/8000/3001/8090 → czadmin, so anything still aimed at sandbox (NPM until the owner
-  re-points `ntfy.contactz.app` and `hc.contactz.app` to 10.10.10.234, bookmarks) keeps working.
-  Remove it once NPM points at czadmin and `docker logs fwd-*` show no traffic.
 - **Beszel agents**: czadmin (same compose as the hub, unix socket), sandbox `/docker/beszel-agent/`
   (:45876, standalone since 2026-10-05), mnt1 `/docker/beszel-agent/`
   (:45876), czap1 `/docker/beszel-agent/` (:45876, reachable from home only via the
