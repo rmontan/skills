@@ -7,8 +7,9 @@ set -euo pipefail
 here=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
 DEST=${ESCROW_COLLECT_DEST:-/mnt/nas-mnt1/escrow}
 ls "${DEST%/*}" >/dev/null 2>&1 || true   # wake autofs
-fstype=$(findmnt -no FSTYPE -T "${DEST%/*}" || true)
-[ "$fstype" = cifs ] || { echo "escrow-collect: ${DEST%/*} is '$fstype', not the NAS share" >&2; exit 1; }
+# autofs stacks its own entry over the share, so findmnt can print "autofs" and "cifs".
+fstypes=$(findmnt -no FSTYPE -T "${DEST%/*}" | tr '\n' ' ' || true)
+case " $fstypes" in *" cifs "*) ;; *) echo "escrow-collect: ${DEST%/*} is '$fstypes', not the NAS share" >&2; exit 1 ;; esac
 mkdir -p "$DEST"
 fail=0
 for f in "$here"/escrow/hosts/*.files; do

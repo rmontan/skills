@@ -507,7 +507,7 @@ Bitwarden by hand (owner decision, 2026-10-07).
   refreshes everything from this skill and runs the job once. It refuses if `age` is missing
   (`apt install age` needs the owner's yes) or if the tier's public key is not in this skill
   yet. Its Healthchecks UUID is `escrow/hosts/<host>.hc` (checks "<host> escrow", created 2026-10-07; the collector's is `escrow/collect.hc`, check "mnt1 escrow collect", 21:30 UTC).
-- **`scripts/escrow-collect`** runs on mnt1 from roberto's crontab through `hc-run`. It copies
+- **`scripts/escrow-collect`** runs on mnt1 from roberto's crontab at 21:30 UTC through `hc-run` (log `~/logs/escrow-collect.log`). It copies
   every host's bundle to the NAS share (`/mnt/nas-mnt1/escrow/`, cifs-checked). That gives
   sandbox, which has no backup of its own, an off-host copy, and the prod bundles a
   second one at home.
