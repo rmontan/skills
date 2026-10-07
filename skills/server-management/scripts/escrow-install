@@ -22,7 +22,12 @@ rcpt="$here/escrow/recipients/$tier.age.pub"
 grep -q '^age1' "$rcpt" || { echo "$rcpt does not look like an age public key" >&2; exit 1; }
 
 run() { if [ "$(hostname -s)" = "$host" ]; then bash -c "$1"; else ssh "$host" "$1"; fi; }
-put() { if [ "$(hostname -s)" = "$host" ]; then sudo install -o root -g root -m "$2" /dev/stdin "$1"; else ssh "$host" "sudo install -o root -g root -m $2 /dev/stdin $1"; fi; }
+# `install /dev/stdin` fails once the target exists ("No such file or directory"), so write a
+# temp file beside the target and rename it into place.
+put() {
+	local cmd="cat > '$1.new' && chown root:root '$1.new' && chmod $2 '$1.new' && mv -f '$1.new' '$1'"
+	if [ "$(hostname -s)" = "$host" ]; then sudo sh -c "$cmd"; else ssh "$host" "sudo sh -c \"$cmd\""; fi
+}
 
 run 'command -v age >/dev/null' || { echo "$host: age is not installed (apt install age) — ask the owner first" >&2; exit 1; }
 run 'command -v hc-run >/dev/null' || { echo "$host: /usr/local/bin/hc-run missing — install it first (see SKILL.md)" >&2; exit 1; }
