@@ -511,7 +511,7 @@ Bitwarden by hand (owner decision, 2026-10-07).
   every host's bundle to the NAS share (`/mnt/nas-mnt1/escrow/`, cifs-checked). That gives
   sandbox, which has no backup of its own, an off-host copy, and the prod bundles a
   second one at home.
-- **`scripts/escrow-drill <host> <identity-file>`** (Mac) decrypts a host's bundle and compares
+- **`scripts/escrow-drill <host>`** (Mac) takes the tier key from Bitwarden itself, decrypts a host's bundle and compares
   every file's SHA-256 with the live one. It prints paths and OK/DIFF only. Run it after
   installing on a host and after changing its list.
 - **Not covered:** srv1 (kept separate by the owner). Account logins that live only in web consoles (Hetzner, Cloudflare, GitHub,

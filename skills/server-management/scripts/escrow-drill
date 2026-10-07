@@ -1,24 +1,34 @@
 #!/usr/bin/env bash
-# escrow-drill <host> <age-identity-file>
+# escrow-drill <host>   — run on the owner's Mac.
 #
-# Proves a host's escrow can be recovered: fetches /docker/escrow/<host>.tar.age, decrypts
-# it with the tier's private key, and compares every file's SHA-256 with the live file on
-# the host. Prints paths and OK/DIFF only, never contents. The plaintext is extracted to
-# a private temp dir and deleted on exit. Run on the Mac (or wherever the key is).
+# Proves a host's escrow can be recovered. It fetches /docker/escrow/<host>.tar.age, takes the
+# host's tier key from Bitwarden ("escrow <tier> age key", tier from escrow/hosts/<host>.tier),
+# decrypts the bundle, and compares every file's SHA-256 with the live file on the host.
+# It prints paths and OK/DIFF only, never contents. The key and the plaintext live in a private
+# temp dir that is deleted on exit.
 set -euo pipefail
-host=${1:?usage: escrow-drill <host> <age-identity-file>}
-key=${2:?usage: escrow-drill <host> <age-identity-file>}
+trap 'echo "escrow-drill: FAILED at line $LINENO: $BASH_COMMAND" >&2' ERR
+here=$(cd "$(dirname "$0")/.." && pwd)
+host=${1:?usage: escrow-drill <host>}
+tier=$(tr -d '[:space:]' < "$here/escrow/hosts/$host.tier")
+for c in age bw jq ssh; do command -v $c >/dev/null || { echo "missing $c" >&2; exit 1; }; done
 sha() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
-work=$(mktemp -d); trap 'rm -rf "$work"' EXIT; chmod 700 "$work"
-ssh "$host" "cat /docker/escrow/$host.tar.age" | age -d -i "$key" | tar -C "$work" -xf -
-(cd "$work" && find . -type f | sed 's|^\./||' | sort) > "$work/.list"
+
+[ -n "${BW_SESSION:-}" ] || BW_SESSION=$(bw unlock --raw); export BW_SESSION
+work=$(mktemp -d); chmod 700 "$work"; trap 'rm -rf "$work"' EXIT
+mkdir -m 700 "$work/x"
+bw get notes "escrow $tier age key" | grep '^AGE-SECRET-KEY-' > "$work/key" || true
+[ "$(grep -c '^AGE-SECRET-KEY-' "$work/key")" = 1 ] || { echo "Bitwarden note 'escrow $tier age key' does not hold exactly one private key" >&2; exit 1; }
+
+ssh "$host" "cat /docker/escrow/$host.tar.age" > "$work/bundle.age"
+age -d -i "$work/key" -o "$work/bundle.tar" "$work/bundle.age"
+tar -C "$work/x" -xf "$work/bundle.tar"
 n=0; bad=0
 while IFS= read -r rel; do
-	[ "$rel" = .list ] && continue
-	local_h=$(sha "$work/$rel" | cut -d' ' -f1)
-	live_h=$(ssh "$host" "sudo sha256sum '/$rel'" | cut -d' ' -f1 || true)
+	local_h=$(sha "$work/x/$rel" | cut -d' ' -f1)
+	live_h=$(ssh -n "$host" "sudo sha256sum '/$rel'" | cut -d' ' -f1 || true)
 	if [ "$local_h" = "$live_h" ]; then echo "OK    /$rel"; else echo "DIFF  /$rel"; bad=$((bad + 1)); fi
 	n=$((n + 1))
-done < "$work/.list"
-echo "escrow-drill $host: $n file(s), $bad differ"
+done < <(cd "$work/x" && find . -type f | sed 's|^\./||' | sort)
+echo "escrow-drill $host ($tier key): $n file(s), $bad differ"
 [ "$bad" -eq 0 ]
