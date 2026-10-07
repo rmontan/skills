@@ -11,3 +11,4 @@
 /docker/localai/.env
 /docker/agentregistry/.env
 /docker/contact_sync_test/.env
+/home/roberto/.config/infra-versions/ntfy-header
