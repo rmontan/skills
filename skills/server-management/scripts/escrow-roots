@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# escrow-roots <host>   — run on the owner's Mac.
+#
+# Copies a host's ROOT secrets (the ones that cannot live inside the escrow they unlock: its
+# restic repository password and, where present, the pgBackRest cipher pass) straight from the
+# host into a Bitwarden secure note "<host> escrow roots". Nothing is printed. One note per
+# host, so czap1's and czadmin's restic passwords never share a note (DEPLOY.md). Refuses if
+# the note exists.
+set -euo pipefail
+host=${1:?usage: escrow-roots <host>}
+name="$host escrow roots"
+[ -n "${BW_SESSION:-}" ] || BW_SESSION=$(bw unlock --raw); export BW_SESSION
+bw sync >/dev/null
+if bw list items --search "$name" | jq -e --arg n "$name" 'any(.[]; .name == $n)' >/dev/null; then
+	echo "Bitwarden already has '$name' — nothing done." >&2; exit 1
+fi
+notes=$(ssh "$host" 'set -e
+	echo "## restic repository password (/etc/restic/password)"; sudo cat /etc/restic/password
+	if sudo test -f /docker/postgres/pgbackrest/pgbackrest.conf; then
+		echo; echo "## pgBackRest repo1-cipher-pass"
+		sudo grep "^repo1-cipher-pass" /docker/postgres/pgbackrest/pgbackrest.conf
+	fi')
+bw get template item | jq --arg n "$name" --arg notes "$notes" \
+	'.type=2 | .secureNote={type:0} | .login=null | .name=$n | .notes=$notes' | bw encode | bw create item >/dev/null
+bw sync >/dev/null
+echo "Saved '$name' in Bitwarden."

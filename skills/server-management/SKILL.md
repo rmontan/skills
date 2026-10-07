@@ -502,6 +502,7 @@ Bitwarden by hand (owner decision, 2026-10-07).
   tars the listed paths and `age`-encrypts them to the tier key. It writes
   `/docker/escrow/<host>.tar.age` (0644, ciphertext only), which czap1's and czadmin's restic
   runs pick up from `/docker`.
+- **On the Mac, once per tier / per host:** `scripts/escrow-keygen <prod|dev>` makes the key pair, saves the private key to Bitwarden ("escrow <tier> age key") and prints the public key. `scripts/escrow-roots <host>` copies that host's restic password and pgBackRest cipher pass into "<host> escrow roots". Both refuse to overwrite an existing note. Run them as scripts, never pasted into a shell.
 - **`scripts/escrow-install <host> <hc-uuid>`** (run from mnt1 or the Mac) installs or
   refreshes everything from this skill and runs the job once. It refuses if `age` is missing
   (`apt install age` needs the owner's yes) or if the tier's public key is not in this skill

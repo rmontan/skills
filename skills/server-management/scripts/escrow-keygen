@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# escrow-keygen <prod|dev>   — run on the owner's Mac, never on a server.
+#
+# Generates the tier's age key pair, stores the PRIVATE key in Bitwarden as a secure note
+# named "escrow <tier> age key" (through the bw CLI, never the screen or clipboard), and
+# prints only the PUBLIC key, which goes into escrow/recipients/<tier>.age.pub.
+# Refuses if that note already exists, so it can never replace a key bundles depend on.
+set -euo pipefail
+tier=${1:?usage: escrow-keygen <prod|dev>}
+case $tier in prod|dev) ;; *) echo "tier must be prod or dev" >&2; exit 1 ;; esac
+for c in age-keygen bw jq; do command -v $c >/dev/null || { echo "missing $c (brew install age bitwarden-cli jq)" >&2; exit 1; }; done
+name="escrow $tier age key"
+[ -n "${BW_SESSION:-}" ] || BW_SESSION=$(bw unlock --raw); export BW_SESSION
+bw sync >/dev/null
+if bw list items --search "$name" | jq -e --arg n "$name" 'any(.[]; .name == $n)' >/dev/null; then
+	echo "Bitwarden already has a note named '$name' — not generating a new key." >&2
+	echo "Its public key: run  bw get notes \"$name\" | age-keygen -y" >&2
+	exit 1
+fi
+dir=$(mktemp -d); chmod 700 "$dir"; trap 'rm -rf "$dir"' EXIT
+age-keygen -o "$dir/key" 2>/dev/null
+pub=$(age-keygen -y "$dir/key")
+notes=$(printf '%s\n%s\n%s\n' "# escrow $tier tier — private key (server-management skill, Secret escrow)" "# public: $pub" "$(grep '^AGE-SECRET-KEY-' "$dir/key")")
+bw get template item | jq --arg n "$name" --arg notes "$notes" \
+	'.type=2 | .secureNote={type:0} | .login=null | .name=$n | .notes=$notes' | bw encode | bw create item >/dev/null
+bw sync >/dev/null
+bw get notes "$name" | grep -q "^AGE-SECRET-KEY-" || { echo "could not read the note back — key NOT saved" >&2; exit 1; }
+echo "Saved '$name' in Bitwarden. Public key for escrow/recipients/$tier.age.pub:"
+echo "$pub"
