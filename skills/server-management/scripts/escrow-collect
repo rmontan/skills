@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # escrow-collect — runs on mnt1 (roberto's crontab, through hc-run). Copies every host's
-# escrow bundle onto the NAS share, so dev hosts with no backup of their own (sandbox,
-# srv1) and the prod hosts alike have an off-host copy. The bundles are ciphertext, so
+# escrow bundle onto the NAS share, so sandbox (no backup of its own)
+# and the prod hosts alike have an off-host copy. The bundles are ciphertext, so
 # mnt1 and the NAS can hold them without being able to read them.
 set -euo pipefail
 here=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
