@@ -1,0 +1,8 @@
+# sandbox — CI runners. Runner tokens are re-issuable; the .env files are what a rebuild needs.
+# /docker/healthchecks and /docker/ntfy are the pre-2026-10-05 copies, due for removal — not listed.
+/home/roberto/.config/server/credentials.env
+/home/roberto/.ssh
+/docker/github-runner/.env
+/docker/github-runner/secrets
+/docker/github-runner-2/.env
+/docker/github-runner-2/secrets

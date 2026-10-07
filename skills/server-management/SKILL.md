@@ -482,6 +482,45 @@ turns that into a non-zero exit.
 
 ---
 
+## Secret escrow (age)
+
+Every host encrypts its own secret files into one bundle that **only the owner can open**, so a
+new or changed secret is escrowed by the next nightly run instead of being pasted into
+Bitwarden by hand (owner decision, 2026-10-07).
+
+- **Two key pairs, by tier** (owner, 2026-10-07): **prod** (czap1, czadmin) and **dev** (mnt1,
+  sandbox, srv1). A leaked dev key never opens production. The **private** halves live only in
+  Bitwarden and on the offline print, and are generated on the owner's Mac. **Never generate a
+  key on a server or in an agent session.** The **public** halves are tracked here:
+  `escrow/recipients/<tier>.age.pub`. A host never holds a private key, so it cannot decrypt
+  its own bundle.
+- **What each host escrows** is `escrow/hosts/<host>.files` (absolute paths, files or
+  directories), with its tier in `escrow/hosts/<host>.tier`. **When you add a secret file to a
+  host, add it to that list in the same session** and re-run `escrow-install`. A listed path
+  that is missing fails the run and writes nothing, so a stale list alerts instead of rotting.
+- **`scripts/escrow`** (host: `/usr/local/sbin/escrow`, root cron 20:45 UTC through `hc-run`)
+  tars the listed paths and `age`-encrypts them to the tier key. It writes
+  `/docker/escrow/<host>.tar.age` (0644, ciphertext only), which czap1's and czadmin's restic
+  runs pick up from `/docker`.
+- **`scripts/escrow-install <host> <hc-uuid>`** (run from mnt1 or the Mac) installs or
+  refreshes everything from this skill and runs the job once. It refuses if `age` is missing
+  (`apt install age` needs the owner's yes) or if the tier's public key is not in this skill
+  yet. Create the Healthchecks check first (daily, grace 1 h) and pass its UUID.
+- **`scripts/escrow-collect`** runs on mnt1 from roberto's crontab through `hc-run`. It copies
+  every host's bundle to the NAS share (`/mnt/nas-mnt1/escrow/`, cifs-checked). That gives
+  sandbox and srv1, which have no backup of their own, an off-host copy, and the prod bundles a
+  second one at home.
+- **`scripts/escrow-drill <host> <identity-file>`** (Mac) decrypts a host's bundle and compares
+  every file's SHA-256 with the live one. It prints paths and OK/DIFF only. Run it after
+  installing on a host and after changing its list.
+- **Not covered:** account logins that live only in web consoles (Hetzner, Cloudflare, GitHub,
+  Google Cloud, Entra, Freemius, Purelymail, Bitwarden's own master password and recovery
+  code). Those stay in Bitwarden. The escrow is for recovery, not day-to-day lookups.
+- **Roots that cannot be inside the escrow they unlock** stay in Bitwarden + the offline print:
+  the two age private keys, each restic repository password, and the pgBackRest cipher pass.
+
+---
+
 ## Error Handling
 
 - `Permission denied (publickey)` when connecting **from** srv1/mnt1/sandbox:

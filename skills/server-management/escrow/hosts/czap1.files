@@ -1,0 +1,10 @@
+# czap1 — contactzapp production. Add /docker/contact_sync2/.env once it exists (it holds the KEK).
+/docker/contact_sync2/.db-secrets
+/docker/postgres/.env
+/docker/postgres/pgbackrest/pgbackrest.conf
+/docker/postgres/pgbackrest/sftp_key
+/etc/restic/password
+/etc/restic/env
+/root/.ssh
+/home/roberto/.ssh
+/home/roberto/.docker/config.json

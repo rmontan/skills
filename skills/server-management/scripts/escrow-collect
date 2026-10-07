@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# escrow-collect — runs on mnt1 (roberto's crontab, through hc-run). Copies every host's
+# escrow bundle onto the NAS share, so dev hosts with no backup of their own (sandbox,
+# srv1) and the prod hosts alike have an off-host copy. The bundles are ciphertext, so
+# mnt1 and the NAS can hold them without being able to read them.
+set -euo pipefail
+here=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+DEST=${ESCROW_COLLECT_DEST:-/mnt/nas-mnt1/escrow}
+ls "${DEST%/*}" >/dev/null 2>&1 || true   # wake autofs
+fstype=$(findmnt -no FSTYPE -T "${DEST%/*}" || true)
+[ "$fstype" = cifs ] || { echo "escrow-collect: ${DEST%/*} is '$fstype', not the NAS share" >&2; exit 1; }
+mkdir -p "$DEST"
+fail=0
+for f in "$here"/escrow/hosts/*.files; do
+	h=$(basename "$f" .files)
+	src="/docker/escrow/$h.tar.age"
+	if [ "$h" = "$(hostname -s)" ]; then cmd=(cat "$src"); else cmd=(ssh -o BatchMode=yes -o ConnectTimeout=15 "$h" cat "$src"); fi
+	if "${cmd[@]}" > "$DEST/.$h.tmp" && [ -s "$DEST/.$h.tmp" ]; then
+		mv -f "$DEST/.$h.tmp" "$DEST/$h.tar.age"; echo "escrow-collect: $h ok ($(stat -c %s "$DEST/$h.tar.age") bytes)"
+	else
+		rm -f "$DEST/.$h.tmp"; echo "escrow-collect: $h FAILED" >&2; fail=1
+	fi
+done
+exit $fail

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# escrow-drill <host> <age-identity-file>
+#
+# Proves a host's escrow can be recovered: fetches /docker/escrow/<host>.tar.age, decrypts
+# it with the tier's private key, and compares every file's SHA-256 with the live file on
+# the host. Prints paths and OK/DIFF only, never contents. The plaintext is extracted to
+# a private temp dir and deleted on exit. Run on the Mac (or wherever the key is).
+set -euo pipefail
+host=${1:?usage: escrow-drill <host> <age-identity-file>}
+key=${2:?usage: escrow-drill <host> <age-identity-file>}
+sha() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
+work=$(mktemp -d); trap 'rm -rf "$work"' EXIT; chmod 700 "$work"
+ssh "$host" "cat /docker/escrow/$host.tar.age" | age -d -i "$key" | tar -C "$work" -xf -
+(cd "$work" && find . -type f | sed 's|^\./||' | sort) > "$work/.list"
+n=0; bad=0
+while IFS= read -r rel; do
+	[ "$rel" = .list ] && continue
+	local_h=$(sha "$work/$rel" | cut -d' ' -f1)
+	live_h=$(ssh "$host" "sudo sha256sum '/$rel'" | cut -d' ' -f1 || true)
+	if [ "$local_h" = "$live_h" ]; then echo "OK    /$rel"; else echo "DIFF  /$rel"; bad=$((bad + 1)); fi
+	n=$((n + 1))
+done < "$work/.list"
+echo "escrow-drill $host: $n file(s), $bad differ"
+[ "$bad" -eq 0 ]

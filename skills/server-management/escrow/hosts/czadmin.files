@@ -1,0 +1,10 @@
+# czadmin — monitoring + detached admin panel.
+/docker/admin/.env
+/docker/healthchecks/.env
+/docker/healthchecks/admin.credentials
+/docker/ntfy/credentials
+/etc/restic/password
+/etc/restic/env
+/root/.ssh
+/home/roberto/.ssh
+/home/roberto/.docker/config.json

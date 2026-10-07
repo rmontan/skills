@@ -1,0 +1,13 @@
+# mnt1 — devapp, CI-adjacent tooling, agent credentials.
+/home/roberto/code/contact_sync2/.env
+/home/roberto/.config/server/credentials.env
+/home/roberto/.config/gh/hosts.yml
+/home/roberto/.docker/config.json
+/home/roberto/.ssh
+/docker/caddy/caddy.env
+/docker/contact_sync2_test/.env
+/docker/portainer/agent-secret.env
+/docker/step_sign/.env
+/docker/localai/.env
+/docker/agentregistry/.env
+/docker/contact_sync_test/.env

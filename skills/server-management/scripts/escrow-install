@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# escrow-install <host> <healthchecks-uuid>
+#
+# Installs (or refreshes) the escrow job on <host> from this skill's tracked files:
+#   scripts/escrow                  -> /usr/local/sbin/escrow
+#   escrow/hosts/<host>.files       -> /etc/escrow/files
+#   escrow/recipients/<tier>.age.pub -> /etc/escrow/recipients (tier from escrow/hosts/<host>.tier)
+#   hc-run cron at 20:45 UTC        -> /etc/cron.d/escrow (before the hosts' restic runs)
+# then runs the job once. Run it from mnt1 or the Mac. It never installs packages: if age
+# is missing on the host it stops and says so (apt install needs the owner's yes).
+set -euo pipefail
+here=$(cd "$(dirname "$0")/.." && pwd)
+host=${1:?usage: escrow-install <host> <healthchecks-uuid>}
+uuid=${2:?usage: escrow-install <host> <healthchecks-uuid>}
+files="$here/escrow/hosts/$host.files"
+tierf="$here/escrow/hosts/$host.tier"
+[ -f "$files" ] && [ -f "$tierf" ] || { echo "no tracked config for $host under $here/escrow/hosts" >&2; exit 1; }
+tier=$(tr -d '[:space:]' < "$tierf")
+rcpt="$here/escrow/recipients/$tier.age.pub"
+[ -s "$rcpt" ] || { echo "no public key for tier '$tier' at $rcpt" >&2; exit 1; }
+grep -q '^age1' "$rcpt" || { echo "$rcpt does not look like an age public key" >&2; exit 1; }
+
+run() { if [ "$(hostname -s)" = "$host" ]; then bash -c "$1"; else ssh "$host" "$1"; fi; }
+put() { if [ "$(hostname -s)" = "$host" ]; then sudo install -o root -g root -m "$2" /dev/stdin "$1"; else ssh "$host" "sudo install -o root -g root -m $2 /dev/stdin $1"; fi; }
+
+run 'command -v age >/dev/null' || { echo "$host: age is not installed (apt install age) — ask the owner first" >&2; exit 1; }
+run 'command -v hc-run >/dev/null' || { echo "$host: /usr/local/bin/hc-run missing — install it first (see SKILL.md)" >&2; exit 1; }
+run 'sudo mkdir -p /etc/escrow && sudo chmod 755 /etc/escrow'
+put /usr/local/sbin/escrow 755 < "$here/scripts/escrow"
+put /etc/escrow/files 644 < "$files"
+put /etc/escrow/recipients 644 < "$rcpt"
+printf '%s\n' "$host" | put /etc/escrow/name 644
+printf '%s\n' "# escrow: encrypt this host's secrets (server-management skill, escrow-install)" \
+	"45 20 * * * root /usr/local/bin/hc-run $uuid /var/log/escrow.log /usr/local/sbin/escrow" \
+	| put /etc/cron.d/escrow 644
+run 'sudo /usr/local/sbin/escrow'

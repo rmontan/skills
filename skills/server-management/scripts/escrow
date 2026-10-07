@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# escrow — encrypt this host's secret files to its tier's age public key.
+#
+# Installed at /usr/local/sbin/escrow by escrow-install; never hand-edit a host copy.
+# Config, also written only by escrow-install:
+#   /etc/escrow/name        the host's alias (czap1, mnt1, ...), names the bundle
+#   /etc/escrow/files       absolute paths (files or directories), one per line, # comments
+#   /etc/escrow/recipients  the age public key(s) of the host's tier (prod or dev)
+# Output: /docker/escrow/<name>.tar.age, mode 0644. It is ciphertext: the host holds no
+# private key, so it cannot decrypt its own escrow, and a compromised host leaks nothing
+# through it. A listed path that is missing fails the run and writes nothing.
+set -euo pipefail
+CONF=${ESCROW_CONF:-/etc/escrow}
+OUTDIR=${ESCROW_OUTDIR:-/docker/escrow}
+die() { echo "escrow: $*" >&2; exit 1; }
+
+[ "$(id -u)" -eq 0 ] || die "run as root"
+command -v age >/dev/null || die "age is not installed"
+[ -s "$CONF/name" ] || die "missing $CONF/name"
+[ -s "$CONF/recipients" ] || die "missing $CONF/recipients"
+[ -s "$CONF/files" ] || die "missing $CONF/files"
+name=$(tr -d '[:space:]' < "$CONF/name")
+
+list=$(mktemp); tmp=""
+trap 'rm -f "$list" ${tmp:+"$tmp"}' EXIT
+n=0; missing=0
+while IFS= read -r p || [ -n "$p" ]; do
+	case $p in ''|'#'*) continue ;; /*) ;; *) die "not an absolute path: $p" ;; esac
+	if [ -e "$p" ]; then
+		printf '%s\n' "${p#/}" >> "$list"; n=$((n + 1))
+	else
+		echo "escrow: MISSING $p" >&2; missing=$((missing + 1))
+	fi
+done < "$CONF/files"
+[ "$missing" -eq 0 ] || die "$missing listed path(s) missing; nothing written"
+
+mkdir -p "$OUTDIR"; chmod 755 "$OUTDIR"
+out="$OUTDIR/$name.tar.age"
+tmp="$out.tmp.$$"
+tar -C / --numeric-owner --verbatim-files-from -cf - -T "$list" | age -R "$CONF/recipients" -o "$tmp"
+chmod 644 "$tmp"
+mv -f "$tmp" "$out"; tmp=""
+echo "escrow: $(date -u +%FT%TZ) $n path(s) -> $out ($(stat -c %s "$out") bytes)"
