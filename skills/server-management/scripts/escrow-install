@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# escrow-install <host> <healthchecks-uuid>
+# escrow-install <host> [healthchecks-uuid]   (default: escrow/hosts/<host>.hc)
 #
 # Installs (or refreshes) the escrow job on <host> from this skill's tracked files:
 #   scripts/escrow                  -> /usr/local/sbin/escrow
@@ -11,7 +11,8 @@
 set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 host=${1:?usage: escrow-install <host> <healthchecks-uuid>}
-uuid=${2:?usage: escrow-install <host> <healthchecks-uuid>}
+uuid=${2:-$(cat "$here/escrow/hosts/$host.hc" 2>/dev/null || true)}
+[ -n "$uuid" ] || { echo "no Healthchecks uuid for $host (escrow/hosts/$host.hc)" >&2; exit 1; }
 files="$here/escrow/hosts/$host.files"
 tierf="$here/escrow/hosts/$host.tier"
 [ -f "$files" ] && [ -f "$tierf" ] || { echo "no tracked config for $host under $here/escrow/hosts" >&2; exit 1; }
