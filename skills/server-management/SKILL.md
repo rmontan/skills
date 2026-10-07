@@ -489,7 +489,7 @@ new or changed secret is escrowed by the next nightly run instead of being paste
 Bitwarden by hand (owner decision, 2026-10-07).
 
 - **Two key pairs, by tier** (owner, 2026-10-07): **prod** (czap1, czadmin) and **dev** (mnt1,
-  sandbox, srv1). A leaked dev key never opens production. The **private** halves live only in
+  sandbox). srv1 is deliberately **not** covered: the owner keeps it separate (2026-10-07). A leaked dev key never opens production. The **private** halves live only in
   Bitwarden and on the offline print, and are generated on the owner's Mac. **Never generate a
   key on a server or in an agent session.** The **public** halves are tracked here:
   `escrow/recipients/<tier>.age.pub`. A host never holds a private key, so it cannot decrypt
@@ -509,12 +509,12 @@ Bitwarden by hand (owner decision, 2026-10-07).
   yet. Its Healthchecks UUID is `escrow/hosts/<host>.hc` (checks "<host> escrow", created 2026-10-07; the collector's is `escrow/collect.hc`, check "mnt1 escrow collect", 21:30 UTC).
 - **`scripts/escrow-collect`** runs on mnt1 from roberto's crontab through `hc-run`. It copies
   every host's bundle to the NAS share (`/mnt/nas-mnt1/escrow/`, cifs-checked). That gives
-  sandbox and srv1, which have no backup of their own, an off-host copy, and the prod bundles a
+  sandbox, which has no backup of its own, an off-host copy, and the prod bundles a
   second one at home.
 - **`scripts/escrow-drill <host> <identity-file>`** (Mac) decrypts a host's bundle and compares
   every file's SHA-256 with the live one. It prints paths and OK/DIFF only. Run it after
   installing on a host and after changing its list.
-- **Not covered:** account logins that live only in web consoles (Hetzner, Cloudflare, GitHub,
+- **Not covered:** srv1 (kept separate by the owner). Account logins that live only in web consoles (Hetzner, Cloudflare, GitHub,
   Google Cloud, Entra, Freemius, Purelymail, Bitwarden's own master password and recovery
   code). Those stay in Bitwarden. The escrow is for recovery, not day-to-day lookups.
 - **Roots that cannot be inside the escrow they unlock** stay in Bitwarden + the offline print:
