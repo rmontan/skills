@@ -7,6 +7,7 @@
 # host, so czap1's and czadmin's restic passwords never share a note (DEPLOY.md). Refuses if
 # the note exists.
 set -euo pipefail
+trap 'echo "$(basename "$0"): FAILED at line $LINENO: $BASH_COMMAND" >&2' ERR
 host=${1:?usage: escrow-roots <host>}
 name="$host escrow roots"
 [ -n "${BW_SESSION:-}" ] || BW_SESSION=$(bw unlock --raw); export BW_SESSION

@@ -6,6 +6,7 @@
 # prints only the PUBLIC key, which goes into escrow/recipients/<tier>.age.pub.
 # Refuses if that note already exists, so it can never replace a key bundles depend on.
 set -euo pipefail
+trap 'echo "$(basename "$0"): FAILED at line $LINENO: $BASH_COMMAND" >&2' ERR
 tier=${1:?usage: escrow-keygen <prod|dev>}
 case $tier in prod|dev) ;; *) echo "tier must be prod or dev" >&2; exit 1 ;; esac
 for c in age-keygen bw jq; do command -v $c >/dev/null || { echo "missing $c (brew install age bitwarden-cli jq)" >&2; exit 1; }; done
@@ -18,7 +19,7 @@ if bw list items --search "$name" | jq -e --arg n "$name" 'any(.[]; .name == $n)
 	exit 1
 fi
 dir=$(mktemp -d); chmod 700 "$dir"; trap 'rm -rf "$dir"' EXIT
-age-keygen -o "$dir/key" 2>/dev/null
+age-keygen -o "$dir/key" 2>/dev/null || { echo "age-keygen failed" >&2; exit 1; }
 pub=$(age-keygen -y "$dir/key")
 notes=$(printf '%s\n%s\n%s\n' "# escrow $tier tier — private key (server-management skill, Secret escrow)" "# public: $pub" "$(grep '^AGE-SECRET-KEY-' "$dir/key")")
 bw get template item | jq --arg n "$name" --arg notes "$notes" \
