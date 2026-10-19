@@ -1,0 +1,48 @@
+#!/bin/bash
+# czap1-logs-archive [YYYY-MM-DD]
+# Archives one UTC day of czap1's logs under /docker/log-archive/<stream>/<day>.log.gz, so they
+# outlive the journal and the container log ring, and restic's /docker run copies them off-host.
+# Default day: yesterday. Installed at /usr/local/sbin/czap1-logs-archive; root cron through
+# hc-run (/etc/cron.d/czap1-logs-archive). Policy: docs/HANDOFF.md section 7 (owner, 2026-10-19).
+#
+#   app        api + worker logs (journald)        12 months  sign-in, OAuth, billing hand-off, errors
+#   host-auth  sshd, sudo (journald)               12 months  who logged in and what they ran as root (deploys)
+#   postgres   the postgres container's stdout     90 days    server errors and the pgBackRest archive log
+#
+# The Caddy access log is not here: it carries client IPs and keeps its own 30-day window.
+# The app is asserted not to log PII or credentials (docs/DEPLOY.md, contact_sync2_api); sudo
+# lines do record the command line, so never pass a secret as an argument.
+set -euo pipefail
+ROOT=${LOG_ARCHIVE_ROOT:-/docker/log-archive}
+day=${1:-$(date -u -d yesterday +%F)}
+next=$(date -u -d "$day + 1 day" +%F)
+echo "== $(date -u +%FT%TZ) czap1-logs-archive $day start"
+
+# put <stream> <command...>: run the command, write its output as <stream>/<day>.log.gz atomically.
+put() {
+  local stream=$1; shift
+  install -d -m 700 "$ROOT/$stream"
+  "$@" | gzip -9 >"$ROOT/$stream/$day.log.gz.tmp"
+  mv "$ROOT/$stream/$day.log.gz.tmp" "$ROOT/$stream/$day.log.gz"
+  echo "$stream: $(zcat "$ROOT/$stream/$day.log.gz" | wc -l) line(s)"
+}
+jr() { journalctl -q --utc --since "$day 00:00:00" --until "$next 00:00:00" -o short-iso --no-pager "$@"; }
+pglogs() { docker logs --since "${day}T00:00:00Z" --until "${next}T00:00:00Z" contact_sync2_postgres 2>&1; }
+
+put app jr -t contact_sync2_api -t contact_sync2_worker
+put host-auth jr -t sshd -t sshd-session -t sudo
+put postgres pglogs
+
+# Prune by the date in the file name, not mtime, so a backfill cannot extend a window.
+prune() { # <stream> <keep-days>
+  local cutoff f d; cutoff=$(date -u -d "$2 days ago" +%F)
+  for f in "$ROOT/$1"/*.log.gz; do
+    [ -e "$f" ] || continue
+    d=$(basename "$f" .log.gz)
+    if [[ $d < $cutoff ]]; then rm -f "$f"; echo "pruned $1/$d"; fi
+  done
+}
+prune app 365
+prune host-auth 365
+prune postgres 90
+echo "== $(date -u +%FT%TZ) czap1-logs-archive $day ok"

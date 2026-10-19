@@ -179,6 +179,14 @@ temporary `beszel superuser`, deleted afterwards); Healthchecks' in `/docker/hea
   `sudo tee -a`) and synced on hub restart — that file is authoritative (systems missing
   from it are removed), so add new hosts there, not only in the UI. The hub's public key
   is the `KEY` in each agent's compose file.
+- **czap1's logs are archived on the host** (owner, 2026-10-19). `/etc/cron.d/czap1-logs-archive` runs
+  `/usr/local/sbin/czap1-logs-archive` (this skill's `scripts/czap1-logs-archive`, installed by copy) daily at 00:20 UTC
+  through `hc-run` (check "czap1 log archive", ebd59333-…). It writes the previous UTC day, gzipped, to
+  `/docker/log-archive/<stream>/<day>.log.gz`: `app` (api and worker journal) and `host-auth` (sshd and sudo journal),
+  kept 12 months, and `postgres` (the container's stdout, mostly pgBackRest archive lines and errors), kept 90 days.
+  Pruning goes by the date in the file name. restic's nightly `/docker` run copies the folder off-host. Re-run or
+  backfill a day with `sudo /usr/local/sbin/czap1-logs-archive YYYY-MM-DD` (journal and the container ring are the only
+  sources, so a day older than them archives empty). The Caddy access log is not in it: it has IPs and keeps 30 days.
 - **czadmin's logs are archived to Google Drive** (owner decision 2026-10-19: Drive only, not the Storage Box;
   mnt1's logs are deliberately not archived). `/etc/cron.d/czadmin-logs-archive` runs
   `/usr/local/sbin/czadmin-logs-archive` (this skill's `scripts/czadmin-logs-archive`, installed by copy like
