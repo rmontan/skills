@@ -1,0 +1,32 @@
+#!/bin/bash
+# czadmin-logs-archive [YYYY-MM-DD]
+# Archives one UTC day of czadmin's logs (the journal and every container's stdout) to
+# Google Drive and deletes archives older than KEEP_DAYS. Default day: yesterday.
+# Installed at /usr/local/sbin/czadmin-logs-archive; root cron through hc-run (/etc/cron.d/czadmin-logs-archive).
+# Owner decision 2026-10-19: czadmin's logs go to Google Drive only (not the Storage Box); mnt1's are not archived.
+# The rclone remote "gdrive" (scope drive.file) lives in root's rclone.conf, escrowed by escrow/hosts/czadmin.files.
+# json-file container logs are ring-buffered (10m x 3), so this has to run daily to catch them.
+set -euo pipefail
+CONF=/root/.config/rclone/rclone.conf
+REMOTE=${REMOTE:-gdrive:czadmin-logs}
+KEEP_DAYS=${KEEP_DAYS:-90}
+day=${1:-$(date -u -d yesterday +%F)}
+next=$(date -u -d "$day + 1 day" +%F)
+STAGE=/var/backups/czadmin-logs-stage
+trap 'rm -rf "$STAGE"' EXIT
+rm -rf "$STAGE"; install -d -m 700 "$STAGE/$day"
+echo "== $(date -u +%FT%TZ) czadmin-logs-archive $day start"
+journalctl --utc --since "$day 00:00:00" --until "$next 00:00:00" -o short-iso --no-pager | gzip -9 >"$STAGE/$day/journal.log.gz"
+n=0
+for c in $(docker ps -a --format '{{.Names}}'); do
+  docker logs --since "${day}T00:00:00Z" --until "${next}T00:00:00Z" "$c" 2>&1 | gzip -9 >"$STAGE/$day/$c.log.gz"
+  n=$((n+1))
+done
+[ "$n" -ge 1 ] || { echo "no containers found; refusing" >&2; exit 1; }
+rclone copy --config "$CONF" "$STAGE/$day" "$REMOTE/$day"
+# rclone copy checks size and hash after upload; list what is now there.
+rclone ls --config "$CONF" "$REMOTE/$day" | wc -l | sed 's/^/files in Drive for the day: /'
+# Permanent delete (not trash): the window is the retention policy, docs/HANDOFF.md section 7.
+rclone delete --config "$CONF" "$REMOTE" --min-age "${KEEP_DAYS}d" --drive-use-trash=false
+rclone rmdirs --config "$CONF" "$REMOTE" --leave-root --drive-use-trash=false
+echo "== $(date -u +%FT%TZ) czadmin-logs-archive $day ok ($n containers)"

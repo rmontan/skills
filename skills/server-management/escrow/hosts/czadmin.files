@@ -8,3 +8,4 @@
 /root/.ssh
 /home/roberto/.ssh
 /home/roberto/.docker/config.json
+/root/.config/rclone/rclone.conf

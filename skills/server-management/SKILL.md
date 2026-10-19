@@ -179,6 +179,16 @@ temporary `beszel superuser`, deleted afterwards); Healthchecks' in `/docker/hea
   `sudo tee -a`) and synced on hub restart — that file is authoritative (systems missing
   from it are removed), so add new hosts there, not only in the UI. The hub's public key
   is the `KEY` in each agent's compose file.
+- **czadmin's logs are archived to Google Drive** (owner decision 2026-10-19: Drive only, not the Storage Box;
+  mnt1's logs are deliberately not archived). `/etc/cron.d/czadmin-logs-archive` runs
+  `/usr/local/sbin/czadmin-logs-archive` (this skill's `scripts/czadmin-logs-archive`, installed by copy like
+  `hc-run`) daily at 01:40 UTC through `hc-run` (check "czadmin log archive", 2be0086e-…). It writes the previous
+  UTC day's journal plus every container's stdout, gzipped, to the rclone remote `gdrive:czadmin-logs/<day>/`
+  (root's `/root/.config/rclone/rclone.conf`, scope `drive.file`, escrowed through `escrow/hosts/czadmin.files`),
+  and permanently deletes anything older than 90 days. Re-run a day by hand with
+  `sudo /usr/local/sbin/czadmin-logs-archive YYYY-MM-DD`; read one back with
+  `sudo rclone cat gdrive:czadmin-logs/<day>/journal.log.gz | gunzip`. The Drive folder `czapbox1-offline` in the same
+  remote is not this job's.
 - **The monitoring box is watched from outside**: roberto's crontab on czadmin runs this skill's
   `scripts/monitoring-heartbeat` (installed at `/usr/local/bin/monitoring-heartbeat`; czadmin has
   no skillshare, so copy it over ssh) every 5 minutes. It pings a healthchecks.io check (owner's account) only when
