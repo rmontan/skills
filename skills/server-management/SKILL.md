@@ -124,6 +124,12 @@ along the paths listed under Network Topology.
   (2026-10-05): Docker CE from download.docker.com (same as sandbox), Docker Convention
   uid/gid 1001:110, watchtower, portainer-agent (:9001, sandbox's agent secret), nightly
   `~/scripts/docker-prune.sh` at 03:30 (generic prune only — no runner housekeeping).
+  It also runs the detached admin panel (`/docker/admin/`, `ghcr.io/rmontan/contact-sync-admin:main`,
+  published on 10.10.10.234:**8095** because Beszel's hub holds 8090). Watchtower cannot update
+  that image: the container mounts only the docker socket, so it has no ghcr.io credentials and
+  every run logs `403 Forbidden`/`unauthorized` for it. The panel is refreshed by the contact_sync2
+  deploy pipeline (`make docker-deploy` → `deploy_panel_refresh`; the runbook is that repo's
+  `docs/DEPLOY.md` → "Updating the panel"), so it tracks the last deploy, not the registry.
 - **tmp1** (2.29.62.35): temporary Hetzner server, being shut down soon, not shown in the diagram. Reachable
   from the **Mac** and from **mnt1** (`ssh tmp1`); sandbox has no alias for it, and tmp1
   has no SSH config/keys to reach anything else (treat it as a leaf, like srv1). Its
@@ -161,6 +167,13 @@ temporary `beszel superuser`, deleted afterwards); Healthchecks' in `/docker/hea
   keep their real IP). `SITE_ROOT=https://hc.contactz.app`. `INTEGRATIONS_ALLOW_PRIVATE_IPS`
   is on so it can reach ntfy on the LAN. Admin via `docker compose exec healthchecks
   ./manage.py …` (its `createsuperuser` takes `--email/--password`, not `--noinput`).
+- **Healthchecks is on v5.0** (upgraded on czadmin 2026-10-20 from v4.4; the v4.4 schema was
+  already current, so no Django migration ran). Upstream republishes `latest` per release, so
+  watchtower takes a major-version jump **unattended** — check the release before it lands on the
+  box that watches itself. The DB to roll back to is the nightly restic's `sqlite3 .backup` copy
+  (`/etc/cron.d/czadmin-restic`), never a file copy of the live DB. v4.4 was
+  `healthchecks/healthchecks@sha256:aa08a61b0dcfd83f1332eab195d5cec1b595ae076eb8388cadf8a3d597114f9b`
+  if it has to come back (pull it by digest; `latest` no longer points there).
 - **Cron jobs report through `/usr/local/bin/hc-run <uuid> <logfile> <cmd…>`**: pings
   `/start`, runs the job appending to the log, then pings the exit code with the last 40 log
   lines; curl failures never affect the job. The one source is this skill's `scripts/hc-run` —
