@@ -51,35 +51,15 @@ they're the cheap part; the agent round-trip was the expensive part this path re
 Run from **inside** the WP's worktree. The agent commits locally; it does NOT push or
 open a PR — integration is the coordinator's job.
 
-### Picking the tier (if the profile defines them)
-Some profiles split `<dispatch>` into complexity tiers instead of one fixed
-mode/command — e.g. a cheap/fast model for a WP the SKILL's step 5 scored 1-2, a
-mid-tier model for 3-4, a frontier model reserved for the single hardest band, 5.
-When the profile's Dispatch section has a tiers table, look up the WP's complexity
-score there and use that row's mode/command/model for everything below, in place of
-the profile's single `<dispatch>`/`<model>`. A tiers table looks like:
+### Picking the tier
+Use the mode/command/model the project's routing file selects for the WP's score
+(SKILL step 5).
 
-```
-- Complexity 1-2 (simple): <mode>, <command/model>
-- Complexity 3-4 (moderate/complex): <mode>, <command/model>
-- Complexity 5 (hard): <mode>, <command/model>
-```
+Use the tier-selected mode:
 
-When the profile has no tiers table, use its single mode/model as before — tiers are
-opt-in per project, not a required profile field, and there's nothing to pick between
-if it only defines one.
-
-Use the profile's `<dispatch>` mode (or the tier-selected one):
-
-- **External CLI** (e.g. opencode) — give the instance its **own isolated data dir**
-  (see below — required, not optional), then run the profile's command from inside
-  the worktree, for example:
-  ```bash
-  cd .worktrees/<wp>
-  XDG_DATA_HOME="<isolated-data-dir-from-below>" opencode run "<work-package prompt>" -m <model> --auto
-  ```
-  An unrecognised flag makes `opencode run` print its help and exit 0 — a silent no-op
-  dispatch — so check `opencode run --help` when the CLI updates.
+- **External CLI** (e.g. opencode) — run the profile's exact invocation from inside the
+  worktree (`cd .worktrees/<wp>` first). Check the exit code and that the log is not
+  empty: a CLI that silently ignores a flag is a no-op dispatch.
   **Name the WP's scratch files for the WP, with these exact paths** — the prompt you
   dispatched and the transcript you captured:
   ```
@@ -118,39 +98,13 @@ boundary, acceptance criteria, "add unit tests for new logic", the `<wp-gate>`
 requirement, "commit locally; do not push/PR", **and the definition-of-done checklist
 below, verbatim.** Match the project's work-package style guide if it has one.
 
-### Isolate opencode's data dir (required for the opencode dispatch mode)
-opencode's session store (`~/.local/share/opencode/opencode.db`) is a single global
-SQLite database with **no per-project or per-worktree isolation**. When several
-opencode processes run concurrently against it, they contend for the same file and
-one crashes with `Error: Failed to execute statement` — an opencode-internal crash in
-its backing store, not a problem with the WP's work; it can happen mid-edit on an
-otherwise-sane change. This has been observed with as few as 7 concurrent opencode
-processes.
-
-Give **every** opencode-dispatched WP its own store by pointing `XDG_DATA_HOME` at a
-per-WP directory, seeded with the existing auth so the instance stays logged in. Do
-this every time you dispatch via opencode, not just when running several in
-parallel — it costs nothing when running solo and removes the failure mode entirely
-when concurrent:
-
-```bash
-# from the repo root, before cd-ing into the worktree
-OC_DATA="$(pwd)/.worktrees/.opencode-data/<wp>"
-mkdir -p "$OC_DATA/opencode"
-cp ~/.local/share/opencode/auth.json ~/.local/share/opencode/account.json "$OC_DATA/opencode/"
-
-cd .worktrees/<wp>
-XDG_DATA_HOME="$OC_DATA" opencode run "<work-package prompt>" -m <model> --auto
-```
-`.worktrees/.opencode-data/<wp>` is a sibling of the WP worktrees, so it's covered by
-the same `.worktrees/` gitignore/exclude entry from step 1 and needs no separate
-*gitignore* entry. It does need separate **deletion** — being ignored is why nobody
-notices it growing. Each store runs to ~150 MB, so §7's teardown removes it explicitly
-alongside the worktree; don't leave it for a someday `rm -rf .worktrees/`, which never
-comes while any WP is live.
+### opencode data dir
+Follow the profile's Dispatch section. Do not give an instance its own `XDG_DATA_HOME`
+unless the profile says to: current opencode keeps credentials beyond `auth.json`, so an
+isolated data dir answers "Model unavailable".
 
 ### Cap concurrency
-Even with isolated stores, don't fire every disjoint WP at once — each opencode/agent
+Don't fire every disjoint WP at once — each opencode/agent
 process is a real CPU/memory/API-rate cost, and a large batch dying together (e.g.
 overnight) is harder to triage. Dispatch in **batches of 2–3 concurrent WPs**,
 letting a batch finish (or fail cleanly) before starting the next, unless the profile

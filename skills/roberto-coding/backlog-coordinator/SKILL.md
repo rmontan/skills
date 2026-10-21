@@ -69,8 +69,8 @@ complexity scoring from step 5. Then stop.
   instruction applies to the full workflow, not this mode.)
 - Present a table: REQ id, title, priority, proposed WP grouping (which REQs you'd
   bundle into one WP and why — the file/area overlap from step 1's scan), and the
-  **complexity score (1-5)** for the resulting WP per step 5's rubric. If the
-  profile defines dispatch tiers, add which tier/model each WP would route to.
+  **complexity score (1-5)** for the resulting WP per step 5, and the tier/model the
+  project's routing file sends it to.
 - End by asking which (if any) to actually build, or wait for a separate instruction
   to proceed — don't fall through into dispatching just because you already did the
   analysis.
@@ -275,43 +275,19 @@ Group the prioritized work into WPs sized for one coding agent each:
   what decides it, not the flag.
 
 ### 5. Score complexity and pick an agent tier
-Score every WP (not every REQ — a bundle gets one score for the group as delivered)
-**1-5** on how demanding it is to build correctly:
+Score every WP (a bundle gets one score for the group as delivered) and route it per
+the project's **routing file** — the profile names it (e.g. `docs/backlog/ROUTING.md`).
+That file owns the scoring rubric, the tier table, the only reasons to dispatch above a
+tier, the mitigations used instead, what to do when an attempt fails, and the line each
+REQ records. This skill carries none of those rules; where anything here seems to
+disagree, the routing file wins.
 
-- **1 — Trivial.** Cosmetic/copy, single file, no branching logic, no new
-  abstraction, no composition-root/schema/domain-invariant touch. Usually fast-path
-  eligible (step 4).
-- **2 — Simple.** Small, well-scoped change, a couple of files, follows an existing
-  pattern directly, no schema or composition-root touch, doesn't touch a
-  domain-invariant-critical path.
-- **3 — Moderate.** Several files/areas, or a straightforward additive schema
-  change, or touches one domain-invariant-critical path but with clear precedent
-  already in the codebase to follow.
-- **4 — Complex.** Cross-cutting across multiple implementations behind one
-  interface (e.g. every provider connector), a real design decision the REQ didn't
-  already settle, or combines a composition-root change with a
-  domain-invariant-critical path.
-- **5 — Hard.** High ambiguity, novel design/architecture, concurrency or
-  race-condition reasoning, or a bundle whose REQs interact in ways that must be
-  reasoned about together rather than independently.
+If the project has no routing file, stop before the first dispatch and write one with
+the owner — at minimum the tier table (complexity band → mode/command/model) and who
+approves the top tier. Never guess model names.
 
-Bundling raises the score (more context, more surface to hold at once) but a bundle
-is usually still cheaper than the sum of its parts dispatched solo — score what the
-WP actually asks the agent to deliver, not the max of its parts taken naively, and
-say why in one line.
-
-Record the score in the WP prompt and in each covered REQ's Notes (`Coordinator
-note: WP complexity N/5 — <one-line reason>`) so a later run doesn't re-derive it.
-
-**Then score coupling — separately, and on mechanical signals.** Complexity measures
-how hard the change is to *build*; coupling measures how far a wrong choice
-*propagates*. They are orthogonal, and conflating them is a known, expensive failure:
-a WP scored 2 (a counting fix — small, obvious, one file) widened a SQL predicate that
-four other call sites depended on, and produced a fresh bug REQ whose title names that
-fix as its cause. The model wasn't over-matched by the difficulty; nothing had told it
-the blast radius was large.
-
-Mark a WP **high-coupling** if *any* of these hold — check them, don't intuit them:
+**Check coupling while scoring, on mechanical signals.** Complexity measures how hard the
+change is to build; coupling measures how far a wrong choice propagates. Mark a WP **high-coupling** if *any* of these hold — check them, don't intuit them:
 
 - it modifies an enum, a shared predicate/classifier, or the API contract
 - it changes a definition consumed at **3 or more** call sites
@@ -321,49 +297,25 @@ Mark a WP **high-coupling** if *any* of these hold — check them, don't intuit 
 - it edits a compensating calculation — anything that corrects, mirrors, or offsets a
   value computed elsewhere
 
-**A high-coupling WP escalates to the profile's top tier and to ask-first, whatever
-its complexity score.** If the profile reserves its most capable model for complexity
-5 and makes that tier non-autonomous, high coupling is a *second, independent* trigger
-for the same treatment: surface the WP (REQ, scope, which coupling signal fired) and
-wait, rather than spending a cheap dispatch on a decision whose cost lands three
-screens away. A complexity-2 fix that changes a shared predicate is exactly the case
-worth the expensive model — the reasoning required is architectural, not mechanical,
-and it is the *cheap* dispatch that has repeatedly proven costly here.
-
-Record it alongside the complexity score (`WP complexity N/5, coupling high/low —
-<which signal>`). If neither applies, say `coupling low` explicitly; a silent omission
-reads as "not checked."
-
-**If the profile defines dispatch tiers** (a mapping from complexity band to
-mode/command/model — `references/dispatch-playbook.md` §2), the score is what
-selects the tier in step 6: typically a cheap/fast model for 1-2, a mid-tier model
-for 3-4, and the most capable (and most expensive) model reserved for 5 alone —
-genuinely hard work, not "whatever the highest score in this wave happened to be."
-**A high-coupling WP takes that top tier too, at any complexity score** (see the
-coupling subsection above); route it there and ask before dispatching, exactly as
-you would for a 5.
-If the profile has no tiers, the score is still worth recording — it's cheap, and
-useful the next time someone reads this REQ — but route every WP through the
-profile's single dispatch mode as before; don't invent a tier mapping the profile
-doesn't have. If the user asks for tiered dispatch and the profile doesn't define
-one, offer to write it (the request-intake template's Dispatch section has the
-format) rather than guessing model names yourself.
+Record both next to each other (`WP complexity N/5, coupling high/low — <signal>`); say
+`coupling low` explicitly, since a silent omission reads as "not checked". What coupling
+changes about the dispatch is the routing file's call.
 
 ### 6. Dispatch (dev + unit testing)
 For each WP, per `references/dispatch-playbook.md`: create the dedicated worktree,
 then run the coding agent from inside it using the profile's **dispatch mode** (an
-external CLI such as opencode, or the `Agent` tool, or by-hand) — and, if the
-profile defines tiers, the specific tier that step 5's complexity score selects. Launch
+external CLI such as opencode, or the `Agent` tool, or by-hand) at the tier the routing
+file selects (step 5). Launch
 agents for disjoint scopes in parallel where it's safe; serialize anything that
 shares files or the one schema slot. Agents commit locally and do not push.
 
 **Cap concurrency regardless of dispatch mode** — dispatch in batches rather than
 firing the whole wave at once (playbook §2 has the batch size and the reasoning).
 
-**If the dispatch mode is opencode**, give each instance its own `XDG_DATA_HOME`
-(playbook step 2) — opencode's session store is one shared global SQLite file with no
-per-process isolation, and concurrent instances contend on it and crash mid-edit with
-`Error: Failed to execute statement` (an opencode-internal failure, not a bad WP).
+**If the dispatch mode is an external CLI** (e.g. opencode), use exactly the invocation
+the profile's Dispatch section gives — data dir, session flags and model syntax
+included. CLIs change between versions; the profile is kept current, the playbook's
+examples are not.
 
 ### 7. Verify each WP
 Run this regardless of what the agent reported — step 4's definition-of-done checklist
