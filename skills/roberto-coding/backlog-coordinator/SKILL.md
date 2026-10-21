@@ -315,7 +315,8 @@ firing the whole wave at once (playbook §2 has the batch size and the reasoning
 **If the dispatch mode is an external CLI** (e.g. opencode), use exactly the invocation
 the profile's Dispatch section gives — data dir, session flags and model syntax
 included. CLIs change between versions; the profile is kept current, the playbook's
-examples are not.
+examples are not. For opencode v2 that means **never set `XDG_DATA_HOME`**: an isolated
+data dir answers "Model unavailable".
 
 ### 7. Verify each WP
 Run this regardless of what the agent reported — step 4's definition-of-done checklist
