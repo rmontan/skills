@@ -1,0 +1,54 @@
+#!/bin/sh
+# runner-rebuild: weekly rebuild of this host's CI runner image (contact-sync2-github-runner:local).
+# Run it through hc-run from /etc/cron.d. Watchtower cannot update a locally built image, so this does.
+#  1. build the new image with --pull (newest base runner + OS packages) under a dated tag; the old runner
+#     keeps serving jobs meanwhile. A failed build changes nothing.
+#  2. wait for the runner to be idle (up to 90 min), then fail closed (exit 1, no swap) rather than kill a job.
+#  3. keep the old image as :prev, swap, recreate, and wait for "Listening for Jobs".
+#     If the new runner never listens, put :prev back and recreate (exit 1).
+# :prev is the rollback image; the nightly docker image prune may remove it after a day.
+set -u
+DIR=/docker/github-runner
+IMG=contact-sync2-github-runner
+C=github-runner
+NEW=$IMG:$(date -u +%Y%m%d)
+echo "== $(date -u +%FT%TZ) $(hostname) runner rebuild"
+cd "$DIR" || exit 1
+CUR_ID=$(docker image inspect -f '{{.Id}}' "$IMG:local") || { echo "no $IMG:local to replace"; exit 1; }
+docker build --pull -t "$NEW" "$DIR" || { echo "build failed: nothing changed"; exit 1; }
+NEW_ID=$(docker image inspect -f '{{.Id}}' "$NEW")
+if [ "$NEW_ID" = "$CUR_ID" ]; then
+	echo "image unchanged: nothing to swap"
+	docker rmi "$NEW" >/dev/null 2>&1
+	exit 0
+fi
+n=0
+while docker exec "$C" pgrep -f Runner.Worker >/dev/null 2>&1; do
+	n=$((n + 1))
+	if [ "$n" -gt 18 ]; then
+		echo "CI job still running after 90 minutes: not swapped (new image kept as $NEW)"
+		exit 1
+	fi
+	sleep 300
+done
+listening() {
+	t=0
+	while [ "$t" -lt 30 ]; do
+		docker logs --since 3m "$C" 2>&1 | grep -q "Listening for Jobs" && return 0
+		t=$((t + 1))
+		sleep 5
+	done
+	return 1
+}
+docker tag "$IMG:local" "$IMG:prev"
+docker tag "$NEW" "$IMG:local"
+docker compose up -d --force-recreate "$C" || echo "compose up reported an error"
+if listening; then
+	echo "swapped to $NEW; runner is listening for jobs"
+	exit 0
+fi
+echo "new runner did not start listening: rolling back to the previous image"
+docker tag "$IMG:prev" "$IMG:local"
+docker compose up -d --force-recreate "$C"
+listening && echo "rolled back; runner is listening" || echo "ROLLBACK ALSO FAILED: runner is down"
+exit 1

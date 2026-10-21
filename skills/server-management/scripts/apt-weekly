@@ -1,0 +1,21 @@
+#!/bin/sh
+# apt-weekly: the weekly full OS update (apt update, apt upgrade). Run it through hc-run from /etc/cron.d.
+# It NEVER reboots: a pending reboot is reported by the daily reboot-alert check, not here.
+# needrestart only lists (NEEDRESTART_MODE=l), so it never restarts services or kills tmux sessions.
+# A host with a CI runner waits up to 90 minutes for the running job to end and then fails closed
+# (exit 1, nothing upgraded) rather than restart Docker under it.
+set -u
+export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
+if docker inspect github-runner >/dev/null 2>&1; then
+	n=0
+	while docker exec github-runner pgrep -f Runner.Worker >/dev/null 2>&1; do
+		n=$((n + 1))
+		if [ "$n" -gt 18 ]; then
+			echo "CI job still running after 90 minutes: not upgraded"
+			exit 1
+		fi
+		sleep 300
+	done
+fi
+echo "== $(date -u +%FT%TZ) $(hostname)"
+apt-get update -q && apt-get -y -q -o Dpkg::Options::=--force-confold upgrade

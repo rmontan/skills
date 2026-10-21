@@ -1,0 +1,52 @@
+#!/bin/sh
+# caddy-rebuild: weekly rebuild of mnt1's host-wide Caddy (caddy-cloudflare:local, built from the floating
+# caddy:builder / caddy:latest in /docker/caddy/Dockerfile). Watchtower cannot update a local image.
+# Run it through hc-run from /etc/cron.d. Caddy serves sites outside the contact_sync2 repo, so:
+#  1. build to a dated tag; a failed build changes nothing; an identical image means nothing to do.
+#  2. test the new image BEFORE it serves: it must validate the live Caddyfile (with the Cloudflare module).
+#  3. record the HTTP status of every site through the running Caddy, keep the old image as :prev, swap.
+#  4. read the same statuses again; any difference (or Caddy not running) rolls back to :prev (exit 1).
+# :prev is the rollback image; the nightly docker image prune may remove it after a day.
+set -u
+DIR=/docker/caddy
+CF=$DIR/data/caddy/Caddyfile
+IMG=caddy-cloudflare
+NEW=$IMG:$(date -u +%Y%m%d)
+echo "== $(date -u +%FT%TZ) $(hostname) caddy rebuild"
+cd "$DIR" || exit 1
+CUR_ID=$(docker image inspect -f '{{.Id}}' "$IMG:local") || { echo "no $IMG:local to replace"; exit 1; }
+docker build --pull -t "$NEW" "$DIR" || { echo "build failed: nothing changed"; exit 1; }
+NEW_ID=$(docker image inspect -f '{{.Id}}' "$NEW")
+if [ "$NEW_ID" = "$CUR_ID" ]; then
+	echo "image unchanged: nothing to swap"
+	docker rmi "$NEW" >/dev/null 2>&1
+	exit 0
+fi
+docker run --rm --user 1001:110 --env-file "$DIR/caddy.env" -v "$CF:/etc/caddy/Caddyfile:ro" "$NEW" \
+	caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 \
+	|| { echo "new image $NEW does not validate the live Caddyfile: not swapped"; exit 1; }
+# One status per site, through the running Caddy on this host.
+sites() {
+	grep -E '^[a-z0-9.-]+ \{$' "$CF" | cut -d' ' -f1 | while read -r h; do
+		printf '%s=%s\n' "$h" "$(curl -sk -m 15 --resolve "$h:443:127.0.0.1" -o /dev/null -w '%{http_code}' "https://$h/")"
+	done
+	printf 'http-localhost=%s\n' "$(curl -s -m 15 -H 'Host: localhost' -o /dev/null -w '%{http_code}' http://127.0.0.1:80/)"
+}
+BEFORE=$(sites)
+echo "before:"; echo "$BEFORE"
+docker tag "$IMG:local" "$IMG:prev"
+docker tag "$NEW" "$IMG:local"
+docker compose up -d --force-recreate caddy || echo "compose up reported an error"
+sleep 20
+AFTER=$(sites)
+echo "after:"; echo "$AFTER"
+if [ "$BEFORE" = "$AFTER" ] && [ "$(docker inspect -f '{{.State.Running}}' caddy 2>/dev/null)" = true ]; then
+	echo "swapped to $NEW: $(docker exec caddy caddy version)"
+	exit 0
+fi
+echo "sites differ after the swap: rolling back to the previous image"
+docker tag "$IMG:prev" "$IMG:local"
+docker compose up -d --force-recreate caddy
+sleep 20
+echo "after rollback:"; sites
+exit 1

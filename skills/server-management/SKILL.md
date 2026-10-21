@@ -216,6 +216,16 @@ temporary `beszel superuser`, deleted afterwards); Healthchecks' in `/docker/hea
   Healthchecks, ntfy, Kuma and Beszel all answer, and sends `/fail` naming what is down otherwise. That
   check must alert by email/app from healthchecks.io, never via the self-hosted ntfy.
 - The watchtowers on czadmin and sandbox have no label filter: these `:latest`/`:2` images auto-update daily.
+  mnt1's and tmp1's are opt-in (`com.centurylinklabs.watchtower.enable=true`; mnt1: portainer, beszel-agent,
+  Mailpit; tmp1: beszel-agent), never the Postgres containers.
+- **Host automation (owner ruling 2026-10-20, set up 2026-10-21; contact_sync2 `docs/DEPLOY.md` → "Host automation")**:
+  mnt1, sandbox, tmp1 and czadmin float; **czap1 does not** (a component moves there only after 7 days on the others, each czap1
+  write with the owner's yes). Installed by copy from this skill's `scripts/`, each through `hc-run` with its own Healthchecks check:
+  `apt-weekly` (Sundays, `/etc/cron.d/apt-weekly`: sandbox 01:00, tmp1 01:30, mnt1 02:00, czadmin 02:30 UTC; `NEEDRESTART_MODE=l`;
+  waits up to 90 min for an idle CI runner, then fails closed), the daily 07:30 `reboot-alert` (`/etc/cron.d/reboot-alert`, check
+  `<host> reboot needed`, email names the host; **never reboot automatically**), `runner-rebuild` (sandbox 03:00, tmp1 03:15) and
+  `caddy-rebuild` (mnt1 04:30; validates, compares every site's HTTP status before and after, rolls back on a difference). `:prev` is the
+  rollback image. Never edit a host's copy.
 
 ## Before Running Anything
 
