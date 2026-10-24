@@ -57,6 +57,15 @@ metadata:
       user: roberto (passwordless sudo)
       hosting: Hetzner, host firewall is ufw (active)
       management: full, with confirmation for dangerous ops
+    tmp2:
+      alias: tmp2
+      connection: ssh tmp2 (from mnt1, key id_ed25519_h2h)
+      ip: 2.31.121.156
+      os: Ubuntu 26.04 LTS (Hetzner, 8 GB RAM; /tmp on disk, tmp.mount masked; 4 GB swapfile)
+      role: Model-benchmark host (scripts/model-bench) — rebuilt from scripts/model-bench/host-setup.sh; holds no GitHub token (repo arrives by host-sync.sh)
+      user: roberto (passwordless sudo)
+      hosting: Hetzner, host firewall is ufw (active, SSH only)
+      management: full, with confirmation for dangerous ops
     czap1:
       alias: czap1
       connection: ssh czap1 (from the Mac or mnt1)
@@ -186,7 +195,7 @@ temporary `beszel superuser`, deleted afterwards); Healthchecks' in `/docker/hea
 - **Beszel agents**: czadmin (same compose as the hub, unix socket), sandbox `/docker/beszel-agent/`
   (:45876, standalone since 2026-10-05), mnt1 `/docker/beszel-agent/`
   (:45876), czap1 `/docker/beszel-agent/` (:45876, reachable from home only via the
-  Hetzner firewall), tmp1 `/docker/beszel/` (agent-only, ufw-allowed from home NAT IP).
+  Hetzner firewall), tmp1 `/docker/beszel/` (agent-only, ufw-allowed from home NAT IP). tmp2 `/docker/beszel-agent/` (host-networked, :45876, ufw allows only the home NAT).
   srv1 has no agent, on purpose. Systems are defined in
   `/docker/beszel/data/beszel_data/config.yml` on czadmin (owned 1001:110 — append with
   `sudo tee -a`) and synced on hub restart — that file is authoritative (systems missing
